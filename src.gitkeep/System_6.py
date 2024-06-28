@@ -1,7 +1,5 @@
 # System-6 The Knowledge Visualizer
 
-# system_6.py
-
 import networkx as nx
 import pandas as pd
 import plotly.graph_objects as go
