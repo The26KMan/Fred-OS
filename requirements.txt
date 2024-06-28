@@ -1,32 +1,15 @@
-# General dependencies
+flask
+sentence-transformers
+nltk
+sumy
+spacy
+cryptography
+tensorflow
+dask[distributed]
+scipy
+requests
+redis
 numpy
 pandas
-scikit-learn
-scipy
-
-# Natural Language Processing
-nltk
-sentence-transformers
-transformers
-spacy
-sumy
-
-# Concurrent and multiprocessing
-concurrent-log-handler
-
-# Knowledge graph and visualization
-networkx
-plotly
-
-# Deep Learning
-tensorflow
-keras
-torch
-
-# Other utilities
-requests
-cryptography
-psutil
-
-# River for machine learning in production
-river
+selenium
+beautifulsoup4
