@@ -1,14 +1,28 @@
-# System-5 The Virtual Research Engine
-
+# System-5: Virtual Research and API Engine
 
 import os
+import hashlib
+import secrets
+from typing import Any, Dict
+import numpy as np
 from cryptography.fernet import Fernet
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Dense, LSTM, Conv2D, MaxPooling2D, Flatten
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.losses import BinaryCrossentropy
 import requests
-from threading import Lock
+from bs4 import BeautifulSoup
+from selenium import webdriver
+import json
+import ssl
+import socket
 from flask import Flask, request, jsonify
 from sentence_transformers import SentenceTransformer
+from threading import Lock
+import redis
 from src.context_manager import ContextManager
 from src.system_4 import System4
+from src.mpu_cluster import MPUCluster
 
 class System5:
     def __init__(self):
@@ -16,7 +30,9 @@ class System5:
         self.nlp_model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
         self.context_manager = ContextManager()
         self.system4 = System4(self.nlp_model, self.context_manager)
+        self.mpu_cluster = MPUCluster()
         self.rate_limit_lock = Lock()
+        self.redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
         self.app = Flask(__name__)
         self.setup_routes()
 
@@ -61,11 +77,11 @@ class System5:
     def api_gateway_logic(self, client_id):
         with self.rate_limit_lock:
             rate_limit_key = f"rate_limit:{client_id}"
-            current_limit = redis_client.get(rate_limit_key)
+            current_limit = self.redis_client.get(rate_limit_key)
             if current_limit and int(current_limit) >= 10:
                 return False, "Rate limit exceeded"
-            redis_client.incr(rate_limit_key)
-            redis_client.expire(rate_limit_key, 60)
+            self.redis_client.incr(rate_limit_key)
+            self.redis_client.expire(rate_limit_key, 60)
         return True, ""
 
     def setup_routes(self):
@@ -100,8 +116,13 @@ class System5:
     def run(self):
         self.app.run(debug=True)
 
-# Example usage
-if __name__ == '__main__':
-    system5 = System5()
-    system5.run()
-        
+    # Additional Secure Communication Functions
+    def secure_send(self, message: bytes, key: bytes) -> bytes:
+        encrypted_message = encrypt_data(message, key)
+        return encrypted_message
+
+    def secure_receive(self, encrypted_message: bytes, key: bytes) -> bytes:
+        message = decrypt_data(encrypted_message, key)
+        return message
+
+    
