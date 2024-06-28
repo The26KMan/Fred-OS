@@ -1,7 +1,5 @@
 # System-7 The Metacognition Layer
 
-# system_7.py
-
 import logging
 from typing import Any, Dict
 from context_manager import ContextManager
