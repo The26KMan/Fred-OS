@@ -1,8 +1,6 @@
 # System-5 The Virtual Research Engine
 
 
-# src/system_5.py
-
 import os
 from cryptography.fernet import Fernet
 import requests
