@@ -1,15 +1,16 @@
 # System-5 The Virtual Research Engine
 
-# src/system_5.py
 
 import os
 from cryptography.fernet import Fernet
-import requests
-from threading import Lock
 from flask import Flask, request, jsonify
 from sentence_transformers import SentenceTransformer
 from src.context_manager import ContextManager
 from src.system_4 import System4
+from src.mpu_cluster import MPUCluster
+from threading import Lock
+import requests
+import redis
 
 class System5:
     def __init__(self):
@@ -17,7 +18,9 @@ class System5:
         self.nlp_model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
         self.context_manager = ContextManager()
         self.system4 = System4(self.nlp_model, self.context_manager)
+        self.mpu_cluster = MPUCluster()
         self.rate_limit_lock = Lock()
+        self.redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
         self.app = Flask(__name__)
         self.setup_routes()
 
@@ -62,11 +65,11 @@ class System5:
     def api_gateway_logic(self, client_id):
         with self.rate_limit_lock:
             rate_limit_key = f"rate_limit:{client_id}"
-            current_limit = redis_client.get(rate_limit_key)
+            current_limit = self.redis_client.get(rate_limit_key)
             if current_limit and int(current_limit) >= 10:
                 return False, "Rate limit exceeded"
-            redis_client.incr(rate_limit_key)
-            redis_client.expire(rate_limit_key, 60)
+            self.redis_client.incr(rate_limit_key)
+            self.redis_client.expire(rate_limit_key, 60)
         return True, ""
 
     def setup_routes(self):
@@ -92,3 +95,17 @@ class System5:
 
         @self.app.route('/external_api', methods=['GET'])
         def external_api():
+            params = request.args.to_dict()
+            headers = {"Authorization": f"Bearer {os.getenv('API_KEY')}"}
+            endpoint = "https://api.example.com/data"
+            api_response = self.external_api_request(endpoint, params, headers)
+            return jsonify(api_response)
+
+    def run(self):
+        self.app.run(debug=True)
+
+# Example usage
+if __name__ == '__main__':
+    system5 = System5()
+    system5.run()
+        
