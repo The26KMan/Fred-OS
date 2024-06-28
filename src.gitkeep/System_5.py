@@ -1,5 +1,6 @@
 # System-5 The Virtual Research Engine
 
+import api_engine
 import os
 import requests
 from typing import Dict
