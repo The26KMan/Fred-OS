@@ -1,7 +1,5 @@
 # Main.py
 
-# main.py
-
 from system_2 import System2, TaskUnderstandingExpert, CompetencyMappingExpert, IntegrationAndSynthesisExpert
 from system_3 import System3
 from system_4 import System4
