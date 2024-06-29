@@ -1,6 +1,5 @@
 # System-2 The Brain
 
-# system_2.py
 
 from context_manager import ContextManager
 from typing import Any, List
