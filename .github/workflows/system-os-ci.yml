@@ -1,0 +1,111 @@
+name: system-os-ci
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore: ["docs/**", "**.md"]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  POETRY_VIRTUALENVS_CREATE: "false"     # install into runner python
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONWARNINGS: "ignore::DeprecationWarning"
+
+jobs:
+  set-up:
+    name: Build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - id: gen
+        run: |
+          echo "matrix={\"python\": [\"3.9\", \"3.10\", \"3.11\", \"3.12-rc\"]}" >> $GITHUB_OUTPUT
+
+  lint:
+    needs: set-up
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.set-up.outputs.python) }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: abatilo/actions-poetry@v3
+      - name: Install deps
+        run: poetry install --no-root
+      - name: Run linters
+        run: |
+          poetry run black --check .
+          poetry run flake8 .
+          poetry run isort --check .
+
+  type-check:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.set-up.outputs.python) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: abatilo/actions-poetry@v3
+      - name: Install deps
+        run: poetry install --no-root
+      - name: Static typing
+        run: poetry run mypy fred_core subsystems
+
+  test:
+    needs: [type-check]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.set-up.outputs.python) }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: "pip"
+      - uses: abatilo/actions-poetry@v3
+      - name: Install deps (+extras for tests)
+        run: poetry install --with test --no-interaction --no-root
+      - name: Unit & integration tests
+        run: |
+          poetry run pytest -q --cov=fred_core --cov=subsystems tests
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python }}
+          path: .coverage
+
+  build-publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write         # for trusted PyPI publish (optional)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: abatilo/actions-poetry@v3
+      - name: Build wheel
+        run: |
+          poetry version ${{ github.ref_name }}
+          poetry build
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+      # optional publish to PyPI / TestPyPI with trusted publisher
+      # - name: Publish to PyPI
+      #   uses: pypa/gh-action-pypi-publish@release/v1
