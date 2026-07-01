@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://the26kman.github.io/Fred-OS/schemas/system1_cognitive_mapping.schema.json",
+  "title": "Fred-OS System-1 Cognitive Mapping",
+  "type": "object",
+  "definitions": {
+    "emotionalSubtype": {
+      "type": "string",
+      "enum": ["curiosity", "mystery", "danger", "wonder", "anxiety", "excitement", "confusion", "revelation", "tension", "resolution"]
+    },
+    "concept": {
+      "type": "object",
+      "required": ["raw_phrase", "normalized_concept", "semantic_domain", "abstraction_level", "emergence_potential"],
+      "properties": {
+        "raw_phrase": {"type": "string", "minLength": 1},
+        "normalized_concept": {"type": "string", "minLength": 1},
+        "semantic_domain": {"type": "string", "enum": ["mathematics", "physics", "philosophy", "psychology", "logic", "spirituality", "general", "synthesis"]},
+        "abstraction_level": {"type": "integer", "minimum": 0, "maximum": 5},
+        "analogical_bridges": {"type": "array", "items": {"type": "string"}},
+        "emotional_subtypes": {"type": "array", "items": {"$ref": "#/definitions/emotionalSubtype"}},
+        "cross_domain_links": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}},
+        "emergence_potential": {"type": "number", "minimum": 0, "maximum": 1},
+        "is_emergent": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "edge": {
+      "type": "object",
+      "required": ["source", "target", "weight", "reasoning_type", "hops", "path"],
+      "properties": {
+        "source": {"type": "string"},
+        "target": {"type": "string"},
+        "weight": {"type": "number", "minimum": 0, "maximum": 1},
+        "reasoning_type": {"type": "string", "enum": ["direct", "analogical", "cross_domain"]},
+        "hops": {"type": "integer", "minimum": 1},
+        "path": {"type": "array", "items": {"type": "string"}, "minItems": 2}
+      },
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "input": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": {"type": "string"},
+        "context": {"type": "array", "items": {"type": "string"}},
+        "enable_emergence": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "required": ["enriched_concepts", "multi_hop_connections", "cognitive_graph", "insight_metrics", "kpi_signals", "uncertainty", "mermaid"],
+      "properties": {
+        "enriched_concepts": {"type": "array", "items": {"$ref": "#/definitions/concept"}},
+        "multi_hop_connections": {"type": "array", "items": {"$ref": "#/definitions/edge"}},
+        "emergent_concepts": {"type": "array", "items": {"$ref": "#/definitions/concept"}},
+        "cognitive_graph": {"type": "object", "required": ["nodes", "edges"]},
+        "insight_metrics": {"type": "object", "required": ["insight_score", "domain_completeness"]},
+        "kpi_signals": {"type": "object", "required": ["completeness_contribution", "trajectory_fit_contribution", "missing_facets", "retrieval_recommendation"]},
+        "uncertainty": {"type": "object", "required": ["score", "drivers", "gaps"]},
+        "mermaid": {"type": "string", "pattern": "^graph TD"}
+      }
+    }
+  },
+  "additionalProperties": false
+}
