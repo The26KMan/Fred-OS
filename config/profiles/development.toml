@@ -1,0 +1,8 @@
+[meta]
+profile = "development"
+
+[memory]
+repository_path = "data/fred_os_memory.dev.sqlite3"
+
+[observability]
+event_log_path = "data/events.dev.jsonl"
