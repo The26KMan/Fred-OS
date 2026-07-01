@@ -27,6 +27,14 @@ contextual_limit = 50
 episodic_limit = 1000
 heritage_injection_mode = "adaptive"
 
+[temporal]
+working_capacity = 5
+micro_window = 5
+meso_window = 4
+episodic_min_reinforcement = 2
+snapshot_path = "data/temporal_sphere_snapshot.json"
+projection_limit = 3
+
 [observability]
 event_log_path = "data/events.jsonl"
 
@@ -35,7 +43,7 @@ enabled = ["S1", "S2", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13"]
 
 [systems.maturity]
 S1 = "implemented"
-S2 = "implemented_adapter"
+S2 = "implemented"
 S3 = "candidate"
 S4 = "candidate"
 S5 = "implemented_adapter"
@@ -56,3 +64,11 @@ max_edges_per_node = 6
 emergence_threshold = 0.48
 completeness_retrieval_floor = 0.75
 neural_overlay_enabled = false
+
+[systems.s2]
+max_edges_per_node = 5
+similarity_floor = 0.40
+transitive_decay = 0.80
+uncertainty_budget = 0.75
+max_bpt_bridges = 5
+cross_domain_bonus = 0.12
