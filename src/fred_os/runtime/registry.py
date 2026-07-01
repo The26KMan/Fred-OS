@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+
 from .config import RuntimeConfig
 from .contracts import HealthResult, SystemPlugin
 
@@ -22,18 +23,12 @@ class CapabilityStatus:
 
 
 class SystemRegistry:
-    """Resolve, instantiate, and audit explicitly declared runtime providers.
+    """Resolve, instantiate, and audit explicit runtime providers.
 
-    Registration is intentionally not treated as implementation evidence. A route can
-    use only an initialized and healthy provider with an allowed maturity label; a
-    hard gate is stricter and accepts only concrete implementation or kernel-owned
-    governance. This prevents a candidate adapter from satisfying an ethical gate.
+    Registration is not implementation evidence. Execution and hard-gate readiness
+    are evaluated against the frozen capability policy so a candidate provider cannot
+    silently satisfy a required System-OS function.
     """
-
-    EXECUTION_MATURITIES = frozenset(
-        {"implemented_adapter", "tested_prototype_adapter", "kernel_governance"}
-    )
-    HARD_GATE_MATURITIES = frozenset({"implemented_adapter", "kernel_governance"})
 
     def __init__(self, config: RuntimeConfig) -> None:
         self.config = config
@@ -85,6 +80,9 @@ class SystemRegistry:
             raise RuntimeError(f"System health failures: {failed}")
         return checks
 
+    def _allowed_maturities(self, policy_key: str) -> frozenset[str]:
+        return frozenset(str(value) for value in self.config.get(policy_key))
+
     def capability(self, system_id: str) -> CapabilityStatus:
         enabled = system_id in self.config.get("systems.enabled")
         registered = system_id in self.classes
@@ -93,6 +91,8 @@ class SystemRegistry:
         health = instance.healthcheck() if instance else HealthResult(False, system_id, "not instantiated")
         healthy = bool(health.ok)
         maturity = str(self.config.get(f"systems.maturity.{system_id}", "undeclared"))
+        execution_maturities = self._allowed_maturities("capability_policy.execution_maturities")
+        hard_gate_maturities = self._allowed_maturities("capability_policy.hard_gate_maturities")
 
         reasons: list[str] = []
         if not enabled:
@@ -103,12 +103,12 @@ class SystemRegistry:
             reasons.append("provider_not_initialized")
         if not healthy:
             reasons.append(f"healthcheck_failed:{health.reason or 'unknown'}")
-        if maturity not in self.EXECUTION_MATURITIES:
+        if maturity not in execution_maturities:
             reasons.append(f"maturity_not_executable:{maturity}")
 
         base_available = enabled and registered and initialized and healthy
-        execution_ready = base_available and maturity in self.EXECUTION_MATURITIES
-        hard_gate_ready = base_available and maturity in self.HARD_GATE_MATURITIES
+        execution_ready = base_available and maturity in execution_maturities
+        hard_gate_ready = base_available and maturity in hard_gate_maturities
         if not hard_gate_ready:
             reasons.append(f"maturity_not_hard_gate_ready:{maturity}")
 
