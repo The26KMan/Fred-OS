@@ -6,14 +6,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from fred_os.semantic_memory import SemanticMemoryLake
+from fred_os.systems.adapters import default_plugins
 from .config import ConfigLoader, RuntimeConfig
 from .governance import GovernanceLayer, GovernanceVerdict
 from .observability import ObservabilityStack
 from .registry import SystemRegistry
 from .routing import Route, Router
+from .task_competency import TaskCompetencyOrchestrator
 from .task_planning import TaskCompetencyPlanner
-from fred_os.semantic_memory import SemanticMemoryLake
-from fred_os.systems.adapters import default_plugins
 
 
 @dataclass
@@ -24,6 +25,8 @@ class RuntimeKernel:
     memory: SemanticMemoryLake
     registry: SystemRegistry
     router: Router
+    task_planner: TaskCompetencyPlanner
+    task_competency: TaskCompetencyOrchestrator
     booted_at: float
 
     @classmethod
@@ -45,142 +48,107 @@ class RuntimeKernel:
         order = registry.resolve()
         registry.instantiate()
         checks = registry.health_check_all()
-        router = Router(config)
-        kernel = cls(config, governance, observability, memory, registry, router, time.time())
+        kernel = cls(
+            config,
+            governance,
+            observability,
+            memory,
+            registry,
+            Router(config),
+            TaskCompetencyPlanner(config),
+            TaskCompetencyOrchestrator(config),
+            time.time(),
+        )
         observability.emit("SYSTEM_READY", {"systems": len(checks), "boot_order": order})
         return kernel
 
-    def _capability_block(
+    def _stop(
         self,
-        *,
         route: Route,
         governance_verdict: GovernanceVerdict,
         capability_report: dict[str, Any],
+        assessment: dict[str, Any],
         outputs: dict[str, Any],
     ) -> dict[str, Any]:
-        missing = capability_report["hard_gate_missing"] or capability_report["required_missing"]
-        rationale = (
-            f"Route '{route.name}' cannot execute because required System-OS capabilities "
-            f"are unavailable or not implementation-ready: {', '.join(missing)}."
-        )
-        execution_verdict = GovernanceVerdict("BLOCK", rationale, 0.0)
+        competency_map = assessment["competency_map"]
+        gaps = list(dict.fromkeys(
+            list(competency_map["missing_hard_gates"])
+            + list(competency_map["missing_required"])
+            + list(capability_report["hard_gate_missing"])
+            + list(capability_report["required_missing"])
+        ))
+        rationale = f"Route '{route.name}' has unresolved required capabilities: {', '.join(gaps)}."
+        verdict = GovernanceVerdict("BLOCK", rationale, 0.0)
         self.observability.emit(
             "CAPABILITY_GAP",
             {
                 "route": route.name,
-                "required_missing": capability_report["required_missing"],
-                "hard_gate_missing": capability_report["hard_gate_missing"],
-                "systems": capability_report["systems"],
+                "route_key": route.key,
+                "authorization": assessment["execution_authorization"],
+                "capability_report": capability_report,
+                "competency_map": competency_map,
             },
         )
         return {
-            "verdict": execution_verdict,
+            "verdict": verdict,
             "governance_verdict": governance_verdict,
             "route": route,
             "capability_report": capability_report,
+            "task_competency": assessment,
             "outputs": outputs,
-            "response": "The runtime did not execute this route because its required governance capability is not ready.",
-        }
-
-    def _qesae_block(
-        self,
-        *,
-        route: Route,
-        governance_verdict: GovernanceVerdict,
-        capability_report: dict[str, Any],
-        outputs: dict[str, Any],
-    ) -> dict[str, Any]:
-        qesae_output = outputs.get("S13", {})
-        verified = qesae_output.get("verified_ethical_decision")
-        rationale = (
-            "The QESAE hard gate denied execution because System-13 did not return an "
-            "approved verified_ethical_decision with auditable rationale."
-        )
-        self.observability.emit(
-            "QESAE_GATE_DENIED",
-            {
-                "route": route.name,
-                "qesae_output": qesae_output,
-                "required_contract": {
-                    "verified_ethical_decision": {"approved": True, "rationale": "...", "audit_id": "..."}
-                },
-            },
-        )
-        return {
-            "verdict": GovernanceVerdict("BLOCK", rationale, 0.0),
-            "governance_verdict": governance_verdict,
-            "route": route,
-            "capability_report": capability_report,
-            "outputs": outputs,
-            "qesae_verification": verified,
-            "response": "The runtime did not execute this high-stakes route because QESAE verification was incomplete.",
+            "response": "Execution was stopped because declared required capabilities are not ready.",
         }
 
     def process_turn(self, raw_input: str) -> dict[str, Any]:
         governance_verdict = self.governance.pre_scan(raw_input)
         if governance_verdict.decision == "BLOCK":
             self.observability.emit("GOVERNANCE_BLOCK", {"reason": governance_verdict.rationale})
-            return {
-                "verdict": governance_verdict,
-                "response": "The runtime blocked this request for safe handling.",
-            }
+            return {"verdict": governance_verdict, "response": "The runtime blocked this request for safe handling."}
 
         s1 = self.registry.get("S1").process({"text": raw_input}, {})
         route = self.router.choose(s1["task_class"], governance_verdict.decision)
-        outputs: dict[str, Any] = {"S1": s1}
-        context: dict[str, Any] = {"s1": s1}
         capability_report = self.registry.assess_route(
-            route.systems,
-            route.hard_gate_systems,
-            route.optional_systems,
+            route.systems, route.hard_gate_systems, route.optional_systems
         )
-        planning = TaskCompetencyPlanner(self.config).plan(
+        planning = self.task_planner.plan(
             raw_input=raw_input,
             s1_output=s1,
             governance_verdict=governance_verdict,
             route=route,
             capability_report=capability_report,
         )
-        outputs["TASK_PLANNING"] = planning
-        context["task_planning"] = planning
-        self.observability.emit(
-            "TASK_ANALYZED",
+        assessment = self.task_competency.assess(
+            raw_input,
+            s1,
             {
-                "task_class": planning["task_analysis"]["task_class"],
-                "intent": planning["task_analysis"]["intent"],
-                "temporal_state": planning["task_analysis"]["temporal_state"],
+                "decision": governance_verdict.decision,
+                "rationale": governance_verdict.rationale,
+                "score": governance_verdict.score,
             },
+            route,
+            capability_report,
         )
-        self.observability.emit(
-            "COMPETENCY_MAPPED",
-            {
-                "route": route.name,
-                "disposition": planning["execution_plan"]["disposition"],
-                "unavailable_competencies": planning["execution_plan"]["unavailable_competencies"],
-            },
-        )
-        if not capability_report["ready"]:
-            return self._capability_block(
-                route=route,
-                governance_verdict=governance_verdict,
-                capability_report=capability_report,
-                outputs=outputs,
-            )
+        outputs: dict[str, Any] = {"S1": s1, "TASK_PLANNING": planning, "TASK_COMPETENCY": assessment}
+        context: dict[str, Any] = {"s1": s1, "task_planning": planning, "task_competency": assessment}
+        self.observability.emit("TASK_ANALYZED", planning["task_analysis"])
+        self.observability.emit("TCOL_ASSESSED", assessment["audit_receipt"])
+        if not capability_report["ready"] or assessment["execution_authorization"]["status"] == "BLOCKED":
+            return self._stop(route, governance_verdict, capability_report, assessment, outputs)
 
+        governance_system_id = str(self.config.get("governance.kernel_system_id"))
         for system_id in route.systems:
             if system_id == "S1":
                 continue
-            if system_id == "S8":
-                outputs["S8"] = {
-                    "system_id": "S8",
+            if system_id == governance_system_id:
+                output = {
+                    "system_id": governance_system_id,
                     "status": "kernel_governance_pre_scan",
                     "decision": governance_verdict.decision,
                     "rationale": governance_verdict.rationale,
                     "score": governance_verdict.score,
                 }
-                context["s8"] = outputs["S8"]
-                continue
-            output = self.registry.get(system_id).process({"text": raw_input}, context)
+            else:
+                output = self.registry.get(system_id).process({"text": raw_input}, context)
             outputs[system_id] = output
             context[system_id.lower()] = output
 
@@ -197,31 +165,30 @@ class RuntimeKernel:
                 )
 
         if "S13" in route.hard_gate_systems:
-            qesae = outputs.get("S13", {}).get("verified_ethical_decision", {})
-            if not isinstance(qesae, dict) or qesae.get("approved") is not True:
-                return self._qesae_block(
-                    route=route,
-                    governance_verdict=governance_verdict,
-                    capability_report=capability_report,
-                    outputs=outputs,
-                )
-            self.observability.emit(
-                "QESAE_GATE_APPROVED",
-                {"route": route.name, "audit_id": qesae.get("audit_id"), "rationale": qesae.get("rationale")},
-            )
+            decision = outputs.get("S13", {}).get("verified_ethical_decision", {})
+            if not isinstance(decision, dict) or decision.get("approved") is not True:
+                assessment["execution_authorization"] = {
+                    "status": "BLOCKED",
+                    "reason": "qesae_verification_incomplete",
+                    "gaps": ["ethical_adaptation"],
+                }
+                return self._stop(route, governance_verdict, capability_report, assessment, outputs)
+            self.observability.emit("QESAE_GATE_APPROVED", {"route": route.name, "audit_id": decision.get("audit_id")})
 
         self.observability.emit(
             "TURN_COMPLETED",
             {
                 "route": route.name,
+                "route_key": route.key,
                 "systems": list(outputs),
-                "optional_unavailable": capability_report["optional_unavailable"],
+                "authorization": assessment["execution_authorization"]["status"],
             },
         )
         return {
             "verdict": governance_verdict,
             "route": route,
             "capability_report": capability_report,
+            "task_competency": assessment,
             "outputs": outputs,
         }
 
