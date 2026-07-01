@@ -134,7 +134,7 @@ class RuntimeKernel:
             route.hard_gate_systems,
             route.optional_systems,
         )
-        planning = TaskCompetencyPlanner().plan(
+        planning = TaskCompetencyPlanner(self.config).plan(
             raw_input=raw_input,
             s1_output=s1,
             governance_verdict=governance_verdict,
