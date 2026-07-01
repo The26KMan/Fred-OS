@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Mapping
 
-from .config import RuntimeConfig
+from .config import ConfigError, RuntimeConfig
 
 
 @dataclass(frozen=True)
 class Route:
-    """A declarative protocol route with explicit capability posture."""
+    """A declared protocol route resolved from frozen runtime configuration."""
 
+    key: str
     name: str
     systems: tuple[str, ...]
     reason: str
@@ -18,37 +20,42 @@ class Route:
 
 
 class Router:
-    """Choose a protocol route without treating declared adapters as available."""
+    """Choose routes from configuration; code contains no route membership policy."""
 
     def __init__(self, config: RuntimeConfig) -> None:
         self.config = config
 
+    def _route_key(self, task_class: str, decision: str) -> str:
+        normalized_decision = decision.lower()
+        if normalized_decision in {"block", "review"}:
+            return str(self.config.get(f"protocol.route_policy.{normalized_decision}"))
+        return str(
+            self.config.get(
+                f"protocol.task_class_routes.{task_class}",
+                self.config.get("protocol.route_policy.default"),
+            )
+        )
+
+    def _definition(self, route_key: str) -> Mapping[str, Any]:
+        route = self.config.get(f"protocol.routes.{route_key}")
+        if not isinstance(route, Mapping):
+            raise ConfigError(f"I-ROUTE-01: protocol route '{route_key}' must be a table")
+        required = ("name", "systems", "hard_gate_systems", "optional_systems", "reason")
+        missing = [field for field in required if field not in route]
+        if missing:
+            raise ConfigError(
+                f"I-ROUTE-02: route '{route_key}' missing required fields: {', '.join(missing)}"
+            )
+        return route
+
     def choose(self, task_class: str, decision: str) -> Route:
-        if decision == "BLOCK":
-            return Route(
-                "safety",
-                ("S8",),
-                "governance blocked route",
-                hard_gate_systems=("S8",),
-            )
-        if decision == "REVIEW":
-            return Route(
-                "deep_review",
-                ("S1", "S2", "S5", "S7", "S8", "S9", "S13"),
-                "elevated evidence review requires QESAE verification",
-                hard_gate_systems=("S8", "S13"),
-            )
-        if task_class in {"creative", "artistic"}:
-            return Route(
-                "creative",
-                ("S1", "S5", "S8", "S9"),
-                "creative task class with governance baseline",
-                hard_gate_systems=("S8",),
-                optional_systems=("S10",),
-            )
+        route_key = self._route_key(task_class, decision)
+        definition = self._definition(route_key)
         return Route(
-            str(self.config.get("protocol.default_mode")),
-            ("S1", "S2", "S6", "S7", "S8"),
-            "default configuration",
-            hard_gate_systems=("S8",),
+            key=route_key,
+            name=str(definition["name"]),
+            systems=tuple(str(system_id) for system_id in definition["systems"]),
+            reason=str(definition["reason"]),
+            hard_gate_systems=tuple(str(system_id) for system_id in definition["hard_gate_systems"]),
+            optional_systems=tuple(str(system_id) for system_id in definition["optional_systems"]),
         )
