@@ -1,20 +1,33 @@
 # Fred-OS vNext Migration Status
 
-`main` remains the original-architecture baseline. Active migration work is isolated on `revamp/systemos-runtime-vnext`.
+`main` remains the original-architecture baseline. The runtime foundation is isolated on `revamp/systemos-runtime-vnext`; the first complete subsystem port is isolated on `revamp/system1-cognitive-mapping`.
 
-Implemented foundation in this branch:
+## Implemented runtime foundation
 
 - Python package metadata and minimal dependency policy.
-- TOML configuration with profile overlay.
+- TOML configuration with development profile overlay.
 - Frozen configuration hash and boot invariants.
 - Kernel-level governance pre-scan.
 - Structured event receipts.
 - Explicit system-plugin contract and dependency registry.
+- Semantic artifact store with versioned revisions, immutable DeepLinks, and audit events.
 
-Next implementation tranche:
+## System-1 migration tranche
 
-1. Semantic Memory Lake with immutable DeepLinks and audit ledger.
-2. RuntimeKernel, protocol selection, and declared system adapters.
-3. Migration inventory and per-System modular ports with tests.
+System-1 is now an executable, modular Cognitive Mapping port with:
 
-The branch distinguishes implemented code, tested prototypes, candidates, governance policy, and historical lineage. No repository artifact is treated as proof of hidden or autonomous runtime behavior.
+- deterministic extraction that does not require repeated phrases;
+- concept normalization, typed graph edges, emergence candidates, uncertainty drivers, KPI signals, and Mermaid output;
+- required/missing facet tracking plus bounded retrieval recommendation;
+- versioned-memory recall handoff and candidate-only write posture;
+- optional bounded telemetry overlay for S7/S12 review;
+- configuration, schema, specification, algorithm note, demo, and regression tests.
+
+## Remaining work
+
+1. Validate the branch in GitHub Actions before merge.
+2. Add optional upstream NLP adapters for dependency parsing, NER, and coreference resolution.
+3. Migrate System-2 through System-13 using the same spec → code → schema → config → example → test pattern.
+4. Inventory and archive or rewrite remaining legacy modules by authority and maturity.
+
+The repository distinguishes implemented code, tested prototypes, candidates, governance policy, and historical lineage. No artifact is treated as proof of hidden or autonomous runtime behavior.
