@@ -34,4 +34,13 @@ jobs:
       - name: Compile runtime sources
         run: python -m compileall -q src tests/test_vnext_runtime.py
       - name: Run vNext migration tests
-        run: python -m pytest -q tests/test_vnext_runtime.py
+        run: |
+          set -o pipefail
+          python -m pytest -q tests/test_vnext_runtime.py 2>&1 | tee pytest-results.txt
+      - name: Upload pytest result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results-${{ matrix.python }}
+          path: pytest-results.txt
+          if-no-files-found: error
