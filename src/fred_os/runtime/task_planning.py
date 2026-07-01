@@ -11,6 +11,7 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
+from .config import RuntimeConfig
 from .governance import GovernanceVerdict
 from .routing import Route
 
@@ -52,42 +53,14 @@ class CompetencyRequirement:
 class TaskCompetencyPlanner:
     """Build a task frame, capability map, and execution preconditions.
 
-    The planner is a compatibility successor to the original TaskUnderstanding,
-    CompetencyMapping, and IntegrationAndSynthesis experts. It is not a second
-    router: routing remains configuration-led. Its role is to make the reason for
-    a selected route and any capability limitation inspectable before execution.
+    Routing remains configuration-led. The planner makes the reason for a selected
+    route and any capability limitation inspectable before execution. Cue sets and
+    thresholds are read from frozen ``task_planning`` configuration rather than
+    hidden runtime defaults.
     """
 
-    _INTENT_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
-        ("design_or_implementation", ("build", "design", "implement", "migrate", "architect", "port")),
-        ("analysis", ("analyze", "assess", "evaluate", "compare", "review", "explain")),
-        ("creative", ("create", "write", "draft", "generate", "compose", "imagine")),
-        ("research", ("research", "sources", "cite", "evidence", "verify", "validate")),
-    )
-    _CONSTRAINT_MARKERS: tuple[str, ...] = (
-        "must",
-        "must not",
-        "cannot",
-        "can't",
-        "without",
-        "only",
-        "avoid",
-        "do not",
-        "keep",
-        "require",
-    )
-    _TEMPORAL_MARKERS: tuple[str, ...] = (
-        "today",
-        "tomorrow",
-        "yesterday",
-        "deadline",
-        "before",
-        "after",
-        "next",
-        "current",
-        "future",
-        "past",
-    )
+    def __init__(self, config: RuntimeConfig) -> None:
+        self.config = config
 
     def plan(
         self,
@@ -100,7 +73,7 @@ class TaskCompetencyPlanner:
     ) -> dict[str, Any]:
         """Produce a serialization-safe planning receipt for a single turn."""
         frame = self._analyze_task(raw_input, s1_output, governance_verdict)
-        competencies = self._map_competencies(frame, route, capability_report)
+        competencies = self._map_competencies(route, capability_report)
         return {
             "task_analysis": asdict(frame),
             "competency_map": [asdict(item) for item in competencies],
@@ -139,7 +112,6 @@ class TaskCompetencyPlanner:
 
     def _map_competencies(
         self,
-        frame: TaskFrame,
         route: Route,
         capability_report: dict[str, Any],
     ) -> tuple[CompetencyRequirement, ...]:
@@ -147,11 +119,13 @@ class TaskCompetencyPlanner:
             ("contextual_mapping", "S1", "Build the current-turn situation and task frame.", "required"),
         ]
         for system_id in route.systems:
-            if system_id == "S1":
-                continue
-            requirements.append(
-                self._system_requirement(system_id, "hard_gate" if system_id in route.hard_gate_systems else "required")
-            )
+            if system_id != "S1":
+                requirements.append(
+                    self._system_requirement(
+                        system_id,
+                        "hard_gate" if system_id in route.hard_gate_systems else "required",
+                    )
+                )
         for system_id in route.optional_systems:
             requirements.append(self._system_requirement(system_id, "optional"))
 
@@ -164,22 +138,21 @@ class TaskCompetencyPlanner:
             seen.add(key)
             status = capability_report.get("systems", {}).get(system_id, {})
             readiness_key = "hard_gate_ready" if criticality == "hard_gate" else "execution_ready"
-            available = bool(status.get(readiness_key, False))
             mapped.append(
                 CompetencyRequirement(
                     competency=competency,
                     system_id=system_id,
                     rationale=rationale,
                     criticality=criticality,
-                    available=available,
+                    available=bool(status.get(readiness_key, False)),
                     maturity=str(status.get("maturity", "undeclared")),
                     reasons=tuple(status.get("reasons", ())),
                 )
             )
         return tuple(mapped)
 
+    @staticmethod
     def _synthesize_execution(
-        self,
         route: Route,
         capability_report: dict[str, Any],
         competencies: tuple[CompetencyRequirement, ...],
@@ -203,27 +176,25 @@ class TaskCompetencyPlanner:
         }
 
     def _intent(self, lowered: str) -> str:
-        for intent, cues in self._INTENT_RULES:
-            if any(cue in lowered for cue in cues):
-                return intent
+        for intent, cues in self.config.get("task_planning.intent_cues").items():
+            if any(str(cue) in lowered for cue in cues):
+                return str(intent)
         return "general_request"
 
     def _constraints(self, text: str) -> tuple[str, ...]:
+        markers = self._cues("constraint_markers")
         sentences = re.split(r"(?<=[.!?;])\s+", text)
-        constrained = [
-            sentence.strip()
-            for sentence in sentences
-            if any(marker in sentence.lower() for marker in self._CONSTRAINT_MARKERS)
-        ]
-        return tuple(constrained[:6])
+        constrained = [sentence.strip() for sentence in sentences if any(marker in sentence.lower() for marker in markers)]
+        return tuple(constrained[: int(self.config.get("task_planning.max_constraints"))])
 
     def _temporal_state(self, text: str, constraints: tuple[str, ...]) -> TemporalState:
         lowered = text.lower()
-        if any(cue in lowered for cue in ("approve", "choose", "commit", "merge", "ship", "decide")):
+        if any(cue in lowered for cue in self._cues("decision_markers")):
             return "decide"
         if constraints:
             return "constrain"
-        if "?" in text or re.match(r"^(what|why|how|when|where|who|can|should|would)\b", lowered):
+        starters = "|".join(re.escape(cue) for cue in self._cues("question_starters"))
+        if "?" in text or re.match(rf"^({starters})\b", lowered):
             return "ask"
         return "state"
 
@@ -235,7 +206,7 @@ class TaskCompetencyPlanner:
     ) -> EvidencePosture:
         if governance_verdict.decision == "REVIEW":
             return "strict"
-        if task_class == "systemic" or any(cue in lowered for cue in ("research", "cite", "source", "verify", "test")):
+        if task_class == "systemic" or any(cue in lowered for cue in self._cues("evidence_markers")):
             return "supporting"
         return "none"
 
@@ -247,15 +218,15 @@ class TaskCompetencyPlanner:
         evidence_posture: EvidencePosture,
     ) -> tuple[str, ...]:
         questions: list[str] = []
-        if len(re.findall(r"\w+", text)) < 5:
+        if len(re.findall(r"\w+", text)) < int(self.config.get("task_planning.short_input_tokens")):
             questions.append("scope")
         if intent == "design_or_implementation" and not any(
-            cue in text.lower() for cue in ("test", "validate", "acceptance", "done")
+            cue in text.lower() for cue in self._cues("validation_markers")
         ):
             questions.append("validation_criteria")
         if evidence_posture == "strict":
             questions.append("authoritative_evidence")
-        if any(marker in text.lower() for marker in self._TEMPORAL_MARKERS):
+        if any(marker in text.lower() for marker in self._cues("temporal_markers")):
             questions.append("temporal_context")
         if governance_verdict.decision == "REVIEW":
             questions.append("risk_boundary")
@@ -272,7 +243,7 @@ class TaskCompetencyPlanner:
             facets.append("constraints")
         if evidence_posture != "none":
             facets.append("evidence")
-        if any(marker in lowered for marker in self._TEMPORAL_MARKERS):
+        if any(marker in lowered for marker in self._cues("temporal_markers")):
             facets.append("temporal_context")
         return tuple(facets)
 
@@ -285,23 +256,25 @@ class TaskCompetencyPlanner:
     ) -> int:
         score = 1
         if task_class == "systemic":
-            score += 2
+            score += int(self.config.get("task_planning.systemic_complexity_bonus"))
         if task_class in {"creative", "artistic"}:
-            score += 1
-        if len(re.findall(r"\w+", lowered)) >= 25:
+            score += int(self.config.get("task_planning.creative_complexity_bonus"))
+        if len(re.findall(r"\w+", lowered)) >= int(self.config.get("task_planning.long_input_tokens")):
             score += 1
         if constraints:
-            score += 1
+            score += int(self.config.get("task_planning.constraint_complexity_bonus"))
         if governance_verdict.decision == "REVIEW":
-            score += 2
-        return min(score, 5)
+            score += int(self.config.get("task_planning.review_complexity_bonus"))
+        return min(score, int(self.config.get("task_planning.complexity_ceiling")))
 
-    @staticmethod
-    def _objective(text: str) -> str:
+    def _objective(self, text: str) -> str:
         if not text:
             return "No user objective was supplied."
         first_sentence = re.split(r"(?<=[.!?])\s+", text, maxsplit=1)[0]
-        return first_sentence[:320]
+        return first_sentence[: int(self.config.get("task_planning.max_objective_chars"))]
+
+    def _cues(self, name: str) -> tuple[str, ...]:
+        return tuple(str(value).lower() for value in self.config.get(f"task_planning.cues.{name}"))
 
     @staticmethod
     def _system_requirement(system_id: str, criticality: Criticality) -> tuple[str, str, str, Criticality]:
@@ -317,5 +290,8 @@ class TaskCompetencyPlanner:
             "S12": ("system_health_monitoring", "Check system stability and remediation posture."),
             "S13": ("qesae_verification", "Verify high-stakes decisions before execution."),
         }
-        competency, rationale = labels.get(system_id, ("declared_system_capability", "Execute the declared system contract."))
+        competency, rationale = labels.get(
+            system_id,
+            ("declared_system_capability", "Execute the declared system contract."),
+        )
         return competency, system_id, rationale, criticality
