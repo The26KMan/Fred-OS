@@ -1,5 +1,5 @@
 [meta]
-schema_version = "2.0"
+schema_version = "2.1"
 revision = "fred-os-vnext"
 profile = "production"
 tenant_id = "kamahni"
@@ -9,6 +9,7 @@ project_id = "fred-os"
 pass_floor = 0.75
 review_floor = 0.50
 block_ceiling = 0.25
+kernel_system_id = "S8"
 protected_keys = ["governance.pass_floor", "governance.review_floor", "governance.block_ceiling", "runtime.active"]
 
 [runtime]
@@ -16,9 +17,50 @@ active = true
 max_chain_depth = 8
 allow_env_overrides = false
 
+[capability_policy]
+execution_maturities = ["implemented_adapter", "tested_prototype_adapter", "kernel_governance"]
+hard_gate_maturities = ["implemented_adapter", "kernel_governance"]
+
 [protocol]
 default_mode = "CHAINING"
 allow_genius_escalation = true
+
+[protocol.route_policy]
+block = "safety"
+review = "deep_review"
+default = "default"
+
+[protocol.task_class_routes]
+creative = "creative"
+artistic = "creative"
+
+[protocol.routes.safety]
+name = "safety"
+systems = ["S8"]
+hard_gate_systems = ["S8"]
+optional_systems = []
+reason = "governance blocked route"
+
+[protocol.routes.deep_review]
+name = "deep_review"
+systems = ["S1", "S2", "S5", "S7", "S8", "S9", "S13"]
+hard_gate_systems = ["S8", "S13"]
+optional_systems = []
+reason = "elevated evidence review requires QESAE verification"
+
+[protocol.routes.creative]
+name = "creative"
+systems = ["S1", "S5", "S8", "S9"]
+hard_gate_systems = ["S8"]
+optional_systems = ["S10"]
+reason = "creative task class with governance baseline"
+
+[protocol.routes.default]
+name = "CHAINING"
+systems = ["S1", "S2", "S6", "S7", "S8"]
+hard_gate_systems = ["S8"]
+optional_systems = []
+reason = "default configured protocol"
 
 [memory]
 repository_path = "data/fred_os_memory.sqlite3"
@@ -55,6 +97,29 @@ question_starters = ["what", "why", "how", "when", "where", "who", "can", "shoul
 evidence_markers = ["research", "cite", "source", "verify", "test"]
 validation_markers = ["test", "validate", "acceptance", "done"]
 
+[task_competency]
+uncertainty_review_threshold = 0.55
+objective_terms = ["design", "build", "implement", "migrate", "analyze", "draft", "create", "provide", "map", "assess"]
+constraint_terms = ["must", "should", "require", "without", "only", "before", "after", "by", "include"]
+objective_required_task_classes = ["systemic", "creative", "artistic"]
+
+[task_competency.route_competencies]
+safety = ["governance"]
+deep_review = ["task_analysis", "concept_association", "emotional_ethics", "metacognition", "governance", "purpose_alignment", "ethical_adaptation"]
+creative = ["task_analysis", "emotional_ethics", "governance", "purpose_alignment"]
+default = ["task_analysis", "concept_association", "influence_mapping", "metacognition", "governance"]
+
+[task_competency.competency_providers]
+task_analysis = ["S1"]
+concept_association = ["S2"]
+emotional_ethics = ["S5"]
+influence_mapping = ["S6"]
+metacognition = ["S7"]
+governance = ["S8"]
+purpose_alignment = ["S9"]
+ethical_adaptation = ["S13"]
+artistic_expression = ["S10"]
+
 [systems]
 enabled = ["S1", "S2", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13"]
 
@@ -72,3 +137,14 @@ S10 = "candidate"
 S11 = "candidate"
 S12 = "implemented_adapter"
 S13 = "candidate"
+
+[systems.s1]
+default_task_class = "general"
+base_uncertainty = 0.25
+empty_input_uncertainty = 0.90
+max_entities = 20
+
+[systems.s1.task_class_rules]
+systemic = ["build", "design", "implement", "migrate", "architecture"]
+artistic = ["artistic", "image", "visual", "poem"]
+creative = ["feel", "relationship", "creative", "art"]
