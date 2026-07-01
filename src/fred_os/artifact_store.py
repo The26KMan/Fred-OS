@@ -36,7 +36,9 @@ class ArtifactStore:
     def __init__(self, path: str | Path, tenant_id: str, project_id: str) -> None:
         self.tenant_id = slug(tenant_id, "default")
         self.project_id = slug(project_id, "system-os")
-        self.connection = sqlite3.connect(path)
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        self.connection = sqlite3.connect(target)
         self.connection.row_factory = sqlite3.Row
         self.connection.executescript("""
           CREATE TABLE IF NOT EXISTS revisions(
