@@ -30,6 +30,31 @@ heritage_injection_mode = "adaptive"
 [observability]
 event_log_path = "data/events.jsonl"
 
+[task_planning]
+max_objective_chars = 320
+max_constraints = 6
+short_input_tokens = 5
+long_input_tokens = 25
+systemic_complexity_bonus = 2
+creative_complexity_bonus = 1
+constraint_complexity_bonus = 1
+review_complexity_bonus = 2
+complexity_ceiling = 5
+
+[task_planning.intent_cues]
+design_or_implementation = ["build", "design", "implement", "migrate", "architect", "port"]
+analysis = ["analyze", "assess", "evaluate", "compare", "review", "explain"]
+creative = ["create", "write", "draft", "generate", "compose", "imagine"]
+research = ["research", "sources", "cite", "evidence", "verify", "validate"]
+
+[task_planning.cues]
+constraint_markers = ["must", "must not", "cannot", "can't", "without", "only", "avoid", "do not", "keep", "require"]
+temporal_markers = ["today", "tomorrow", "yesterday", "deadline", "before", "after", "next", "current", "future", "past"]
+decision_markers = ["approve", "choose", "commit", "merge", "ship", "decide"]
+question_starters = ["what", "why", "how", "when", "where", "who", "can", "should", "would"]
+evidence_markers = ["research", "cite", "source", "verify", "test"]
+validation_markers = ["test", "validate", "acceptance", "done"]
+
 [systems]
 enabled = ["S1", "S2", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13"]
 
