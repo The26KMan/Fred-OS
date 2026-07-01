@@ -166,7 +166,7 @@ class DreamEngine:
 
     def _path_blockers(self, path: CandidatePath, catalog: dict[str, Component], critical: set[str]) -> list[str]:
         blockers: list[str] = []
-        work_ids = {item.identifier for item in path.work}
+        work_components = {item.component_id for item in path.work}
         for item in path.work:
             component = catalog.get(item.component_id)
             if component is None:
@@ -175,7 +175,7 @@ class DreamEngine:
             if component.status == Status.BLOCKED:
                 blockers.append(f"blocked_component:{item.component_id}")
             for dependency in component.dependencies:
-                if dependency not in work_ids:
+                if dependency not in work_components:
                     upstream = catalog.get(dependency)
                     if upstream is None or upstream.status not in {Status.IMPLEMENTED, Status.TESTED_PROTOTYPE}:
                         blockers.append(f"unsatisfied_dependency:{item.component_id}->{dependency}")
