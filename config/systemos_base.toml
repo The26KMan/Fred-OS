@@ -5,5 +5,45 @@ profile = "production"
 tenant_id = "kamahni"
 project_id = "fred-os"
 
+[governance]
+pass_floor = 0.75
+review_floor = 0.50
+block_ceiling = 0.25
+protected_keys = ["governance.pass_floor", "governance.review_floor", "governance.block_ceiling", "runtime.active"]
+
 [runtime]
 active = true
+max_chain_depth = 8
+allow_env_overrides = false
+
+[protocol]
+default_mode = "CHAINING"
+allow_genius_escalation = true
+
+[memory]
+repository_path = "data/fred_os_memory.sqlite3"
+working_limit = 7
+contextual_limit = 50
+episodic_limit = 1000
+heritage_injection_mode = "adaptive"
+
+[observability]
+event_log_path = "data/events.jsonl"
+
+[systems]
+enabled = ["S1", "S2", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13"]
+
+[systems.maturity]
+S1 = "implemented_adapter"
+S2 = "implemented_adapter"
+S3 = "candidate"
+S4 = "candidate"
+S5 = "implemented_adapter"
+S6 = "tested_prototype_adapter"
+S7 = "implemented_adapter"
+S8 = "kernel_governance"
+S9 = "implemented_adapter"
+S10 = "candidate"
+S11 = "candidate"
+S12 = "implemented_adapter"
+S13 = "candidate"
