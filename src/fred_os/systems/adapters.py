@@ -1,14 +1,14 @@
 """Inspectable System-OS migration adapters.
 
-Each adapter retains an explicit maturity label in configuration. Registration
-is a runtime contract, not a claim that every historical System specification is
-fully implemented.
+Registration describes actual callable adapters. Configuration maturity labels
+remain the authoritative declaration of implementation depth.
 """
 from __future__ import annotations
+
 from typing import Any, ClassVar
 
 from fred_os.runtime.contracts import SystemPlugin
-from .system1_cognitive_mapping import System1CognitiveMappingPlugin
+from .system1_runtime_adapter import System1RuntimeAdapter
 
 
 class DeclaredAdapter(SystemPlugin):
@@ -50,4 +50,4 @@ class S13(DeclaredAdapter): SYSTEM_ID = "S13"; SYSTEM_NAME = "Ethical Adaptation
 
 
 def default_plugins() -> list[type[SystemPlugin]]:
-    return [System1CognitiveMappingPlugin, S2, S5, S6, S7, S8, S9, S10, S11, S12, S13]
+    return [System1RuntimeAdapter, S2, S5, S6, S7, S8, S9, S10, S11, S12, S13]
