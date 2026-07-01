@@ -1,0 +1,9 @@
+[meta]
+schema_version = "2.0"
+revision = "fred-os-vnext"
+profile = "production"
+tenant_id = "kamahni"
+project_id = "fred-os"
+
+[runtime]
+active = true
