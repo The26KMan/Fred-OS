@@ -11,6 +11,7 @@ from .governance import GovernanceLayer, GovernanceVerdict
 from .observability import ObservabilityStack
 from .registry import SystemRegistry
 from .routing import Route, Router
+from .task_planning import TaskCompetencyPlanner
 from fred_os.semantic_memory import SemanticMemoryLake
 from fred_os.systems.adapters import default_plugins
 
@@ -132,6 +133,31 @@ class RuntimeKernel:
             route.systems,
             route.hard_gate_systems,
             route.optional_systems,
+        )
+        planning = TaskCompetencyPlanner().plan(
+            raw_input=raw_input,
+            s1_output=s1,
+            governance_verdict=governance_verdict,
+            route=route,
+            capability_report=capability_report,
+        )
+        outputs["TASK_PLANNING"] = planning
+        context["task_planning"] = planning
+        self.observability.emit(
+            "TASK_ANALYZED",
+            {
+                "task_class": planning["task_analysis"]["task_class"],
+                "intent": planning["task_analysis"]["intent"],
+                "temporal_state": planning["task_analysis"]["temporal_state"],
+            },
+        )
+        self.observability.emit(
+            "COMPETENCY_MAPPED",
+            {
+                "route": route.name,
+                "disposition": planning["execution_plan"]["disposition"],
+                "unavailable_competencies": planning["execution_plan"]["unavailable_competencies"],
+            },
         )
         if not capability_report["ready"]:
             return self._capability_block(
