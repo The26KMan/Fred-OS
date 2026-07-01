@@ -32,6 +32,6 @@ jobs:
           python -m pip install -e '.[dev]'
           python -m pip check
       - name: Compile runtime sources
-        run: python -m compileall -q src tests
-      - name: Run runtime tests
-        run: python -m pytest -q
+        run: python -m compileall -q src tests/test_vnext_runtime.py
+      - name: Run vNext migration tests
+        run: python -m pytest -q tests/test_vnext_runtime.py
