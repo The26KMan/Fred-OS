@@ -34,7 +34,7 @@ event_log_path = "data/events.jsonl"
 enabled = ["S1", "S2", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13"]
 
 [systems.maturity]
-S1 = "implemented_adapter"
+S1 = "implemented"
 S2 = "implemented_adapter"
 S3 = "candidate"
 S4 = "candidate"
@@ -47,3 +47,12 @@ S10 = "candidate"
 S11 = "candidate"
 S12 = "implemented_adapter"
 S13 = "candidate"
+
+[systems.s1]
+max_concepts = 15
+min_phrase_chars = 3
+max_ngram = 3
+max_edges_per_node = 6
+emergence_threshold = 0.48
+completeness_retrieval_floor = 0.75
+neural_overlay_enabled = false
