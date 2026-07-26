@@ -1,33 +1,47 @@
 # Fred-OS
 
-Fred-OS is an advanced AI Assistant designed to enhance ChatGPT's natural language processing capabilities by operating as a "Secondary Brain." Fred-OS integrates multiple systems to provide sophisticated AI operations, cognitive control, and interaction with external APIs.
+Fred-OS is the deployable repository and runtime environment for the FRED/System-OS research program. It is intended to provide governed structure around model inference: task interpretation, context assembly, cognitive routing, tools, artifact production, evaluation, observability, and project continuity.
 
-## Features
+## Current repository state
 
-- Task Understanding
-- Competency Mapping
-- Integration and Synthesis
-- Enhanced Memory Management
-- Parallel Task Processing
-- Context Extension
-- Ethical Evaluation
-- Knowledge Integration and Visualization
+This repository contains early System prototypes and an emerging vNext architecture. The first vNext executable slice formalizes how retrieved conversation, library, repository, web, API, and tool data becomes reviewable repository artifacts.
 
-## Installation
+```mermaid
+flowchart LR
+    Sources[Conversation / Library / Repo / Web / APIs] --> Records[Typed Source Records]
+    Records --> Map[Context and Task Map]
+    Map --> Refine[Specs / Code / Tests / Schemas / Skills / Diagrams]
+    Refine --> Gate[Evidence + Governance + Validation Gate]
+    Gate --> Change[Reviewable Repository Change Set]
+    Change --> Receipt[Trace Receipt]
+```
 
-1. Clone the repository:
-    ```bash
-    git clone https://github.com/The26KMan/Fred-OS.git/Fred-OS.git
-    cd Fred-OS
-    ```
+## vNext entry points
 
-2. Install the dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
+- [Retrieval-to-Repository Architecture](docs/architecture/retrieval-to-repository-pipeline.md)
+- [Repository Refinement Skill](skills/repository-refinement/SKILL.md)
+- [PseuLang Functioning](specs/functionings/repository_refinement.pseulang.md)
+- [Python Contracts](src/systemos/repository_pipeline/)
+- [Unit Tests](tests/unit/test_repository_pipeline.py)
 
-## Usage
+## Design commitments
 
-To run Fred-OS, execute the main script:
+- Provider-agnostic core runtime and typed capability adapters.
+- Source closure and provenance retained from retrieval through repository output.
+- Explicit evidence states: declared, specified, interpreted, observed, tool-supported, runtime-enforced, and counterfactually validated.
+- PseuLang and QeuLang remain declarative until executable tooling proves otherwise.
+- Systems are selected functions and perspectives; orchestration chooses the smallest sufficient ensemble.
+- Repository writes, tests, persistence, and external actions require tool receipts.
+- Credentials and environment-specific secrets never belong in source control.
+
+## Run the current tests
+
+The vNext pipeline uses only the Python standard library; the tests require `pytest`.
+
 ```bash
-python src/mai
+PYTHONPATH=src python -m pytest tests/unit/test_repository_pipeline.py
+```
+
+## Repository direction
+
+The target architecture separates documentation, schemas, specifications, implementation, tests, examples, skills, tools, and deployment assets so human developers and model agents can load only the context needed for the current task.
