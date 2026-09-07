@@ -82,9 +82,6 @@ class CommandGateway:
                 result = deserialize_command_result(self.idempotency_store.decode_result(existing))
                 return GatewayResponse(principal.caller_id, True, result)
 
-            # A live worker owns this logical request. Wait for its result rather
-            # than deleting or stealing the reservation. A dead worker's lease
-            # expires and may then be recovered/reclaimed deterministically.
             observed = self.idempotency_store.wait_for_change(
                 principal.caller_id,
                 request.idempotency_key,
@@ -113,7 +110,6 @@ class CommandGateway:
                 owner_token,
             ):
                 break
-            # Another waiter won the expired lease race; observe the new owner.
 
         envelope = CommandEnvelope(
             command_id=command_id,
@@ -154,24 +150,28 @@ class CommandGateway:
 
     def _recover_pending(self, record: IdempotencyRecord):
         """Recover journal-embedded results, or refuse duplicate execution after a known commit."""
-        for entry in reversed(self.kernel.journal.entries()):
-            payload = entry.payload
-            if str(payload.get("command_id", "")) != str(record.command_id or ""):
-                continue
-            if str(payload.get("idempotency_key", "")) != record.idempotency_key:
-                continue
-            result_payload = payload.get("command_result")
-            if entry.entry_type in {"TX_COMMIT", "TX_ABORT"} and isinstance(result_payload, Mapping):
-                packed = dict(result_payload)
-                self.idempotency_store.finalize(record.caller_id, record.idempotency_key, record.request_hash, packed)
-                return deserialize_command_result(packed)
-            if entry.entry_type == "TX_COMMIT":
-                raise IdempotencyRecoveryError(
-                    "runtime commit exists for this idempotency key but the full cached CommandResult is unavailable; "
-                    "duplicate execution was refused"
-                )
-            if entry.entry_type == "TX_ABORT":
-                return None
+        # Recovery reads the hash-chained WAL only while holding the same
+        # inter-process lock used by RuntimeKernel transactions. This prevents
+        # a waiter from observing another worker's partially appended record.
+        with self.kernel.runtime_lock:
+            for entry in reversed(self.kernel.journal.entries()):
+                payload = entry.payload
+                if str(payload.get("command_id", "")) != str(record.command_id or ""):
+                    continue
+                if str(payload.get("idempotency_key", "")) != record.idempotency_key:
+                    continue
+                result_payload = payload.get("command_result")
+                if entry.entry_type in {"TX_COMMIT", "TX_ABORT"} and isinstance(result_payload, Mapping):
+                    packed = dict(result_payload)
+                    self.idempotency_store.finalize(record.caller_id, record.idempotency_key, record.request_hash, packed)
+                    return deserialize_command_result(packed)
+                if entry.entry_type == "TX_COMMIT":
+                    raise IdempotencyRecoveryError(
+                        "runtime commit exists for this idempotency key but the full cached CommandResult is unavailable; "
+                        "duplicate execution was refused"
+                    )
+                if entry.entry_type == "TX_ABORT":
+                    return None
         return None
 
     def _capability_descriptor(self, capability: str) -> dict[str, Any]:
