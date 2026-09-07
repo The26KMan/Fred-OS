@@ -18,6 +18,14 @@ max_chain_depth = 8
 allow_env_overrides = false
 state_store_path = "data/runtime_state.jsonl"
 journal_path = "data/runtime.wal.jsonl"
+lock_path = "data/runtime.tx.lock"
+lock_timeout_seconds = 30.0
+
+[gateway]
+idempotency_busy_timeout_ms = 10000
+idempotency_lease_seconds = 30.0
+idempotency_wait_seconds = 30.0
+idempotency_poll_seconds = 0.025
 
 [capability_policy]
 execution_maturities = ["implemented", "implemented_adapter", "tested_prototype_adapter", "kernel_governance"]
@@ -118,50 +126,84 @@ objective_required_task_classes = ["systemic", "creative", "artistic"]
 safety = ["governance"]
 deep_review = ["task_analysis", "concept_association", "emotional_ethics", "metacognition", "governance", "purpose_alignment", "ethical_adaptation"]
 creative = ["task_analysis", "emotional_ethics", "governance", "purpose_alignment"]
-default = ["task_analysis", "concept_association", "influence_mapping", "metacognition", "governance"]
+default = ["task_analysis", "concept_association", "influence_modeling", "metacognition", "governance"]
 
-[task_competency.competency_providers]
-task_analysis = ["S1"]
-concept_association = ["S2"]
-emotional_ethics = ["S5"]
-influence_mapping = ["S6"]
-metacognition = ["S7"]
-governance = ["S8"]
-purpose_alignment = ["S9"]
-ethical_adaptation = ["S13"]
-artistic_expression = ["S10"]
+[task_competency.provider_map]
+task_analysis = "S1"
+concept_association = "S2"
+emotional_ethics = "S5"
+influence_modeling = "S6"
+metacognition = "S7"
+governance = "S8"
+purpose_alignment = "S9"
+artistic_reasoning = "S10"
+ethical_adaptation = "S13"
 
-[systems]
-enabled = ["S1", "S2", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13"]
+[system.S1]
+enabled = true
+maturity = "implemented_adapter"
+weight = 1.0
+threshold = 0.54
+max_nodes = 96
+context_top_k = 5
+context_candidate_limit = 25
 
-[systems.maturity]
-S1 = "implemented"
-S2 = "implemented"
-S3 = "candidate"
-S4 = "candidate"
-S5 = "implemented_adapter"
-S6 = "tested_prototype_adapter"
-S7 = "implemented_adapter"
-S8 = "kernel_governance"
-S9 = "implemented_adapter"
-S10 = "candidate"
-S11 = "candidate"
-S12 = "implemented_adapter"
-S13 = "candidate"
+[system.S2]
+enabled = true
+maturity = "tested_prototype_adapter"
+weight = 1.0
 
-[systems.s1]
-max_concepts = 15
-min_phrase_chars = 3
-max_ngram = 3
-max_edges_per_node = 6
-emergence_threshold = 0.48
-completeness_retrieval_floor = 0.75
-neural_overlay_enabled = false
+[system.S3]
+enabled = true
+maturity = "candidate"
+weight = 1.0
 
-[systems.s2]
-max_edges_per_node = 5
-similarity_floor = 0.40
-transitive_decay = 0.80
-uncertainty_budget = 0.75
-max_bpt_bridges = 5
-cross_domain_bonus = 0.12
+[system.S4]
+enabled = true
+maturity = "candidate"
+weight = 1.0
+
+[system.S5]
+enabled = true
+maturity = "tested_prototype_adapter"
+weight = 1.0
+
+[system.S6]
+enabled = true
+maturity = "tested_prototype_adapter"
+weight = 1.0
+
+[system.S7]
+enabled = true
+maturity = "tested_prototype_adapter"
+weight = 1.0
+
+[system.S8]
+enabled = true
+maturity = "kernel_governance"
+weight = 1.0
+
+[system.S9]
+enabled = true
+maturity = "tested_prototype_adapter"
+weight = 1.0
+
+[system.S10]
+enabled = true
+maturity = "candidate"
+weight = 1.0
+
+[system.S11]
+enabled = true
+maturity = "candidate"
+weight = 1.0
+
+[system.S12]
+enabled = true
+maturity = "candidate"
+weight = 1.0
+
+[system.S13]
+enabled = true
+maturity = "candidate"
+weight = 1.0
