@@ -57,6 +57,21 @@ class ServiceLifecycle:
             self.drain_signal = sig
             self._condition.notify_all()
 
+    def request_drain_from_signal(self, sig: int | None = None) -> None:
+        """Signal-handler-safe drain marker.
+
+        Python signal handlers execute on the main thread between bytecodes.
+        They must not attempt to re-acquire the condition lock because a signal
+        can arrive while the same thread is inside request accounting. The GIL
+        makes these simple field assignments atomic enough for the marker; the
+        normal request exit path will notify any condition waiters.
+        """
+        self._assert_owner()
+        if self.state not in {"STOPPED", "DRAINING"}:
+            self.state = "DRAINING"
+            self.drain_requested_at = time.time()
+            self.drain_signal = sig
+
     @contextmanager
     def request_scope(self) -> Iterator[None]:
         self._assert_owner()
@@ -102,6 +117,8 @@ class ServiceLifecycle:
 class ServiceProbeConfig:
     bootstrap_lock_path: Path
     bootstrap_probe_timeout_seconds: float = 0.02
+    runtime_probe_timeout_seconds: float = 0.01
+    idempotency_probe_timeout_ms: int = 50
 
 
 class ServiceReadinessProbe:
@@ -127,7 +144,9 @@ class ServiceReadinessProbe:
             reasons.append(f"kernel_state:{self.gateway.kernel.status}")
 
         try:
-            self.gateway.idempotency_store.readiness_probe()
+            self.gateway.idempotency_store.readiness_probe(
+                busy_timeout_ms=self.config.idempotency_probe_timeout_ms
+            )
             details["idempotency_store"] = "ready"
         except Exception as exc:
             reasons.append(f"idempotency_store:{exc.__class__.__name__}")
@@ -149,17 +168,25 @@ class ServiceReadinessProbe:
             reasons.append("bootstrap_lock:busy")
             details["bootstrap_lock"] = "busy"
 
-        # Verify that the worker's observed capsule matches the latest committed
-        # capsule. Reads are forensic only; TX_COMMIT remains the authority.
+        # Synchronize this worker's read view with the authoritative capsule
+        # while holding the same runtime lock used by mutations. This changes
+        # only process-local hydration state; TX_COMMIT remains the authority.
         try:
-            committed = self.gateway.kernel.journal.committed_capsule_ids()
-            latest = self.gateway.kernel.state_store.latest_committed(committed)
-            current = self.gateway.kernel.get_current_capsule()
-            if latest is None or latest.capsule_id != current.capsule_id:
-                reasons.append("state_tail:stale")
-                details["state_tail"] = "stale"
-            else:
-                details["state_tail"] = current.capsule_id
+            runtime_probe_lock = InterProcessRuntimeLock(
+                self.gateway.kernel.runtime_lock.path,
+                timeout_seconds=self.config.runtime_probe_timeout_seconds,
+                poll_seconds=min(self.config.runtime_probe_timeout_seconds or 0.001, 0.005),
+            )
+            with runtime_probe_lock:
+                current = self.gateway.kernel.get_current_capsule()
+                latest = self.gateway.kernel._refresh_authoritative_state_locked(
+                    session_id=current.session_id
+                )
+                details["state_tail"] = latest.capsule_id
+        except RuntimeLockTimeout:
+            # Another worker is inside an authoritative transaction. That is
+            # normal coordinated contention, not a readiness failure.
+            details["state_tail"] = "transaction_busy"
         except Exception as exc:
             reasons.append(f"state_tail:{exc.__class__.__name__}")
             details["state_tail"] = "unavailable"
@@ -206,7 +233,7 @@ def install_drain_signal_handlers(lifecycle: ServiceLifecycle, stop_event: threa
     previous: dict[int, Any] = {}
 
     def handler(sig: int, _frame: Any) -> None:
-        lifecycle.request_drain(sig)
+        lifecycle.request_drain_from_signal(sig)
         stop_event.set()
 
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -253,13 +280,22 @@ async def serve_streamable_http(
     server = _NoSignalUvicornServer.build(
         uvicorn.Config(app=app, host=host, port=int(port), workers=1, lifespan="on")
     )
-    lifecycle.mark_ready()
     serve_task = asyncio.create_task(server.serve())
     try:
+        # Do not advertise readiness until the ASGI server has actually bound
+        # its socket and completed startup/lifespan initialization.
+        while not server.started and not serve_task.done() and not stop_event.is_set():
+            await asyncio.sleep(0.01)
+        if server.started and not stop_event.is_set():
+            lifecycle.mark_ready()
+
         while not stop_event.is_set() and not serve_task.done():
             await asyncio.sleep(0.05)
+
         if stop_event.is_set():
-            lifecycle.request_drain(lifecycle.drain_signal)
+            # Signal handler already marked DRAINING without interrupting any
+            # active synchronous gateway transaction. New MCP calls are refused
+            # by ServiceLifecycle.request_scope().
             idle = lifecycle.wait_for_idle(shutdown_grace_seconds)
             server.should_exit = True
             if not idle:
