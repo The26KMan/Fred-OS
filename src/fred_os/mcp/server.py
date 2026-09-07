@@ -23,6 +23,7 @@ from mcp.types import (
 
 from fred_os.gateway import CommandGateway, GatewayError
 
+from .service import ProbeASGIApp, ServiceDrainingError, ServiceLifecycle, ServiceReadinessProbe
 from .tools import list_authorized_tools
 from .translator import format_gateway_response_for_mcp, mcp_call_to_gateway_request
 
@@ -35,12 +36,20 @@ class MCPAdapterConfig:
     token: str
     session_id: str | None = None
     server_name: str = "fred-os"
-    server_version: str = "0.2.0"
+    server_version: str = "0.2.2"
 
 
-def build_mcp_server(gateway: CommandGateway, config: MCPAdapterConfig) -> Server[Any]:
+def build_mcp_server(
+    gateway: CommandGateway,
+    config: MCPAdapterConfig,
+    *,
+    lifecycle: ServiceLifecycle | None = None,
+) -> Server[Any]:
     """Build one MCP server whose tools are authorized runtime capabilities."""
     dispatch_lock = asyncio.Lock()
+    process_lifecycle = lifecycle or ServiceLifecycle()
+    if process_lifecycle.state == "STARTING":
+        process_lifecycle.mark_ready()
 
     async def list_tools(
         _ctx: ServerRequestContext[Any],
@@ -69,14 +78,15 @@ def build_mcp_server(gateway: CommandGateway, config: MCPAdapterConfig) -> Serve
             session_id=config.session_id,
         )
         try:
-            # M2.1 makes shared runtime/idempotency state safe across processes,
-            # but one MCP process still keeps deterministic local call ordering.
-            # RuntimeKernel acquires the inter-process transaction lock below
-            # this boundary, so this asyncio lock is a transport-local ordering
-            # policy rather than the source of cross-process state authority.
+            # M2.1 makes shared runtime/idempotency state safe across processes.
+            # M2.2 adds drain accounting: once SIGTERM/SIGINT marks this worker
+            # DRAINING, no new request may enter this scope, while an already
+            # active synchronous gateway call is allowed to reach TX_COMMIT or
+            # TX_ABORT before the HTTP worker exits.
             async with dispatch_lock:
-                response = gateway.execute(request)
-        except GatewayError as exc:
+                with process_lifecycle.request_scope():
+                    response = gateway.execute(request)
+        except (GatewayError, ServiceDrainingError) as exc:
             failure = {
                 "status": "ERROR",
                 "error": exc.__class__.__name__,
@@ -95,12 +105,14 @@ def build_mcp_server(gateway: CommandGateway, config: MCPAdapterConfig) -> Serve
             is_error=False,
         )
 
-    return Server(
+    server = Server(
         config.server_name,
         version=config.server_version,
         on_list_tools=list_tools,
         on_call_tool=call_tool,
     )
+    setattr(server, "fred_os_lifecycle", process_lifecycle)
+    return server
 
 
 async def run_stdio_server(server: Server[Any]) -> None:
@@ -113,6 +125,14 @@ async def run_stdio_server(server: Server[Any]) -> None:
         )
 
 
-def build_streamable_http_app(server: Server[Any]):
-    """Return the ASGI app used by a supervised long-lived HTTP deployment."""
-    return server.streamable_http_app()
+def build_streamable_http_app(
+    server: Server[Any],
+    *,
+    lifecycle: ServiceLifecycle | None = None,
+    readiness: ServiceReadinessProbe | None = None,
+):
+    """Return the MCP ASGI app, optionally wrapped with service probes."""
+    app = server.streamable_http_app()
+    if lifecycle is None or readiness is None:
+        return app
+    return ProbeASGIApp(app, lifecycle, readiness)
