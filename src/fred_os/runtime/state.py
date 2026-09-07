@@ -9,7 +9,7 @@ from pathlib import Path
 import time
 from typing import Any, Iterable, Mapping
 
-from .contracts import canonical_hash, normalize_for_hash
+from .contracts import canonical_logical_hash, normalize_for_hash
 
 
 class StateStoreError(RuntimeError):
@@ -33,7 +33,7 @@ class StateCapsule:
 
     @property
     def logical_state_hash(self) -> str:
-        return canonical_hash({
+        return canonical_logical_hash({
             "session_id": self.session_id,
             "config_hash": self.config_hash,
             "temporal_state": self.temporal_state,
@@ -75,7 +75,7 @@ class StateCapsule:
         memory_state: dict[str, Any],
         repository_state: dict[str, Any],
     ) -> "StateCapsule":
-        identity = canonical_hash({
+        identity = canonical_logical_hash({
             "kind": "GENESIS",
             "session_id": session_id,
             "config_hash": config_hash,
@@ -118,7 +118,7 @@ class StateCapsule:
             "repository_state": repository_state,
             "receipt_hashes": receipt_hashes,
         }
-        identity = canonical_hash(logical)
+        identity = canonical_logical_hash(logical)
         return cls(
             capsule_id=f"capsule-{identity[:20]}",
             sequence=sequence,
