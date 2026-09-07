@@ -11,13 +11,19 @@ from fred_os.runtime.kernel import RuntimeKernel
 from .auth import TokenAuthenticator
 from .contracts import (
     CapabilityNotFoundError,
+    GatewayError,
     GatewayRequest,
     GatewayResponse,
+    IdempotencyRecord,
     SchemaValidationError,
     deserialize_command_result,
     serialize_command_result,
 )
 from .idempotency import IdempotencyStore
+
+
+class IdempotencyRecoveryError(GatewayError):
+    """A prior authoritative outcome exists but its full boundary result is unavailable."""
 
 
 class CommandGateway:
@@ -59,7 +65,7 @@ class CommandGateway:
             if existing.status == "COMPLETE":
                 result = deserialize_command_result(self.idempotency_store.decode_result(existing))
                 return GatewayResponse(principal.caller_id, True, result)
-            recovered = self._recover_pending(principal.caller_id, request.idempotency_key, request_hash)
+            recovered = self._recover_pending(existing)
             if recovered is not None:
                 return GatewayResponse(principal.caller_id, True, recovered)
             self.idempotency_store.release_pending(principal.caller_id, request.idempotency_key, request_hash)
@@ -96,20 +102,24 @@ class CommandGateway:
         normalized = deserialize_command_result(result_payload)
         return GatewayResponse(principal.caller_id, False, normalized)
 
-    def _recover_pending(self, caller_id: str, idempotency_key: str, request_hash: str):
+    def _recover_pending(self, record: IdempotencyRecord):
+        """Recover future journal-embedded results, or refuse duplicate execution after a known commit."""
         for entry in reversed(self.kernel.journal.entries()):
             payload = entry.payload
-            if str(payload.get("caller_id", "")) != caller_id:
+            if str(payload.get("command_id", "")) != str(record.command_id or ""):
                 continue
-            if str(payload.get("idempotency_key", "")) != idempotency_key:
-                continue
-            if str(payload.get("request_fingerprint", "")) != request_hash:
+            if str(payload.get("idempotency_key", "")) != record.idempotency_key:
                 continue
             result_payload = payload.get("command_result")
             if entry.entry_type in {"TX_COMMIT", "TX_ABORT"} and isinstance(result_payload, Mapping):
                 packed = dict(result_payload)
-                self.idempotency_store.finalize(caller_id, idempotency_key, request_hash, packed)
+                self.idempotency_store.finalize(record.caller_id, record.idempotency_key, record.request_hash, packed)
                 return deserialize_command_result(packed)
+            if entry.entry_type == "TX_COMMIT":
+                raise IdempotencyRecoveryError(
+                    "runtime commit exists for this idempotency key but the full cached CommandResult is unavailable; "
+                    "duplicate execution was refused"
+                )
             if entry.entry_type == "TX_ABORT":
                 return None
         return None
