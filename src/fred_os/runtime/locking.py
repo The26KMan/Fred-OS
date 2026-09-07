@@ -1,7 +1,7 @@
-"""Cross-process execution lock for the authoritative FRED OS transaction boundary.
+"""Cross-process execution lock and process-ownership guards for FRED OS.
 
-The lock is advisory and process-owned. On POSIX it uses ``flock`` so the
-kernel releases ownership automatically if a worker exits or is SIGKILLed.
+The runtime lock is advisory and process-owned. On POSIX it uses ``flock`` so
+the kernel releases ownership automatically if a worker exits or is SIGKILLed.
 The lock file's JSON payload is diagnostic metadata only; it is never used as
 an authority source and stale metadata does not prevent recovery.
 """
@@ -19,6 +19,26 @@ class RuntimeLockTimeout(TimeoutError):
     """The runtime transaction lock could not be acquired before its deadline."""
 
 
+class ProcessOwnershipError(RuntimeError):
+    """A process-local runtime/service resource was used after fork inheritance."""
+
+
+def assert_process_owner(owner_pid: int, component: str) -> None:
+    """Fail closed if a process-local object was inherited into another PID.
+
+    M2.2 intentionally requires runtime/gateway resources to be constructed in
+    the worker that uses them. This prevents future pre-fork supervisors from
+    accidentally sharing inherited SQLite handles, event-loop state, or an
+    already-open transaction-lock descriptor.
+    """
+    current_pid = os.getpid()
+    if int(owner_pid) != current_pid:
+        raise ProcessOwnershipError(
+            f"{component} belongs to pid {owner_pid}, but is being used by pid {current_pid}; "
+            "construct FRED OS service resources post-fork in each worker"
+        )
+
+
 @dataclass(frozen=True)
 class RuntimeLockOwner:
     pid: int
@@ -34,8 +54,10 @@ class InterProcessRuntimeLock:
         self.timeout_seconds = float(timeout_seconds)
         self.poll_seconds = float(poll_seconds)
         self._handle: IO[str] | None = None
+        self.owner_pid = os.getpid()
 
     def acquire(self) -> RuntimeLockOwner:
+        assert_process_owner(self.owner_pid, "InterProcessRuntimeLock")
         if self._handle is not None:
             raise RuntimeError("runtime lock is already held by this object")
         handle = self.path.open("a+", encoding="utf-8")
@@ -61,6 +83,7 @@ class InterProcessRuntimeLock:
         return owner
 
     def release(self) -> None:
+        assert_process_owner(self.owner_pid, "InterProcessRuntimeLock")
         handle = self._handle
         if handle is None:
             return
