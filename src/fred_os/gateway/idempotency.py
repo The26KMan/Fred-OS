@@ -3,12 +3,15 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import json
+import os
 from pathlib import Path
 import sqlite3
 import threading
 import time
 import uuid
 from typing import Iterator
+
+from fred_os.runtime.locking import assert_process_owner
 
 from .contracts import IdempotencyConflictError, IdempotencyRecord
 
@@ -17,9 +20,9 @@ class IdempotencyStore:
     """SQLite WAL-backed gateway reservation store.
 
     Connections are operation-scoped so the store is safe to use from lease
-    heartbeat threads and from separate worker processes. A PENDING row has an
-    explicit owner token and renewable lease; another worker may take ownership
-    only after that lease expires.
+    heartbeat threads and from separate worker processes. M2.2 additionally
+    binds each store object to the PID that constructed it; inherited pre-fork
+    objects fail closed and must be reconstructed inside the child worker.
     """
 
     def __init__(
@@ -37,16 +40,22 @@ class IdempotencyStore:
         self.lease_seconds = float(lease_seconds)
         self.wait_seconds = float(wait_seconds)
         self.poll_seconds = float(poll_seconds)
+        self.owner_pid = os.getpid()
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
+    def _assert_owner(self) -> None:
+        assert_process_owner(self.owner_pid, "IdempotencyStore")
+
+    def _connect(self, *, busy_timeout_ms: int | None = None) -> sqlite3.Connection:
+        self._assert_owner()
+        timeout_ms = self.busy_timeout_ms if busy_timeout_ms is None else int(busy_timeout_ms)
         connection = sqlite3.connect(
             self.path,
-            timeout=max(self.busy_timeout_ms / 1000.0, 0.001),
+            timeout=max(timeout_ms / 1000.0, 0.001),
             isolation_level=None,
         )
         connection.row_factory = sqlite3.Row
-        connection.execute(f"PRAGMA busy_timeout={self.busy_timeout_ms}")
+        connection.execute(f"PRAGMA busy_timeout={timeout_ms}")
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA synchronous=FULL")
         return connection
@@ -75,6 +84,25 @@ class IdempotencyStore:
                 connection.execute("ALTER TABLE gateway_idempotency ADD COLUMN owner_token TEXT")
             if "lease_expires_at" not in columns:
                 connection.execute("ALTER TABLE gateway_idempotency ADD COLUMN lease_expires_at REAL")
+
+    def readiness_probe(self, *, busy_timeout_ms: int = 50) -> None:
+        """Verify the store can participate in a near-term gateway write.
+
+        ``BEGIN IMMEDIATE`` intentionally checks more than a passive read: a
+        worker that cannot obtain SQLite write intent promptly should not claim
+        readiness for state-mutating gateway traffic. The probe rolls back and
+        never changes idempotency authority.
+        """
+        with self._connect(busy_timeout_ms=busy_timeout_ms) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='gateway_idempotency'"
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError("gateway idempotency schema is missing")
+            finally:
+                connection.execute("ROLLBACK")
 
     @staticmethod
     def new_owner_token() -> str:
@@ -211,6 +239,7 @@ class IdempotencyStore:
         request_hash: str,
         owner_token: str,
     ) -> Iterator[None]:
+        self._assert_owner()
         stop = threading.Event()
         interval = max(min(self.lease_seconds / 3.0, 5.0), 0.05)
 
@@ -314,4 +343,5 @@ class IdempotencyStore:
 
     def close(self) -> None:
         """Operation-scoped connections require no persistent close action."""
+        self._assert_owner()
         return None

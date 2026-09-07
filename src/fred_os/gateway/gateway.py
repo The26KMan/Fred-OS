@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import os
 import time
 import uuid
 from typing import Any
 
 from fred_os.runtime.contracts import CommandEnvelope, canonical_hash
 from fred_os.runtime.kernel import RuntimeKernel
+from fred_os.runtime.locking import assert_process_owner
 
 from .auth import TokenAuthenticator
 from .contracts import (
@@ -40,8 +42,13 @@ class CommandGateway:
         self.kernel = kernel
         self.authenticator = authenticator
         self.idempotency_store = idempotency_store
+        self.owner_pid = os.getpid()
+
+    def _assert_owner(self) -> None:
+        assert_process_owner(self.owner_pid, "CommandGateway")
 
     def execute(self, request: GatewayRequest) -> GatewayResponse:
+        self._assert_owner()
         principal = self.authenticator.authenticate(request.token)
         descriptor = self._capability_descriptor(request.target_capability)
         self.authenticator.authorize(
@@ -150,6 +157,7 @@ class CommandGateway:
 
     def _recover_pending(self, record: IdempotencyRecord):
         """Recover journal-embedded results, or refuse duplicate execution after a known commit."""
+        self._assert_owner()
         # Recovery reads the hash-chained WAL only while holding the same
         # inter-process lock used by RuntimeKernel transactions. This prevents
         # a waiter from observing another worker's partially appended record.
@@ -214,4 +222,5 @@ class CommandGateway:
             raise SchemaValidationError(f"payload field {field_name!r} must be {expected}")
 
     def close(self) -> None:
+        self._assert_owner()
         self.idempotency_store.close()

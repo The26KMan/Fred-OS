@@ -1,6 +1,15 @@
-"""M2 Model Context Protocol adapter for FRED OS."""
+"""M2/M2.2 Model Context Protocol and service lifecycle interfaces."""
 
 from .server import MCPAdapterConfig, build_mcp_server, build_streamable_http_app, run_stdio_server
+from .service import (
+    ProbeASGIApp,
+    ServiceDrainingError,
+    ServiceLifecycle,
+    ServiceProbeConfig,
+    ServiceReadinessProbe,
+    install_drain_signal_handlers,
+    serve_streamable_http,
+)
 from .tools import capability_to_mcp_tool, list_authorized_tools
 from .translator import format_gateway_response_for_mcp, mcp_call_to_gateway_request
 
@@ -13,4 +22,11 @@ __all__ = [
     "list_authorized_tools",
     "mcp_call_to_gateway_request",
     "format_gateway_response_for_mcp",
+    "ServiceLifecycle",
+    "ServiceDrainingError",
+    "ServiceProbeConfig",
+    "ServiceReadinessProbe",
+    "ProbeASGIApp",
+    "install_drain_signal_handlers",
+    "serve_streamable_http",
 ]
