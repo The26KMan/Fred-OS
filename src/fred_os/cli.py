@@ -163,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
                     host=args.host,
                     port=args.port,
                     shutdown_grace_seconds=float(kernel.config.get("service.shutdown_grace_seconds", 30.0)),
+                    drain_quiesce_seconds=float(kernel.config.get("service.drain_quiesce_seconds", 0.25)),
                 )
             )
             return 0
