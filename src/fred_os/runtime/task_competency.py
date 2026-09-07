@@ -52,14 +52,19 @@ class TaskCompetencyOrchestrator:
         if ambiguities:
             gaps.append("contradictory_constraints")
 
-        threshold = float(self.config.get("task_competency.uncertainty_review_threshold", 1.0))
+        advisory_threshold = float(self.config.get("task_competency.uncertainty_review_threshold", 1.0))
+        execution_threshold = float(self.config.get("task_competency.execution_review_threshold", 1.0))
         review_reasons: list[str] = []
+        execution_barriers: list[str] = []
         if str(governance_verdict["decision"]) == "REVIEW":
             review_reasons.append("governance_review_route")
-        if uncertainty >= threshold:
-            review_reasons.append("high_uncertainty")
+        if uncertainty >= advisory_threshold:
+            review_reasons.append("elevated_uncertainty")
+        if uncertainty >= execution_threshold:
+            execution_barriers.append("critical_uncertainty")
         if ambiguities:
             review_reasons.append("structured_ambiguity")
+            execution_barriers.append("structured_ambiguity")
 
         return {
             "task_class": task_class,
@@ -67,8 +72,9 @@ class TaskCompetencyOrchestrator:
             "constraints": constraints,
             "explicit_systems": explicit_systems,
             "uncertainty": uncertainty,
-            "requires_review": bool(review_reasons),
-            "review_reasons": review_reasons,
+            "requires_review": bool(review_reasons or execution_barriers),
+            "review_reasons": list(dict.fromkeys(review_reasons)),
+            "execution_barriers": list(dict.fromkeys(execution_barriers)),
             "ambiguities": list(ambiguities),
             "gaps": list(dict.fromkeys(gaps)),
         }
@@ -142,13 +148,12 @@ class TaskCompetencyOrchestrator:
                 "gaps": list(task_contract["gaps"]),
             }
 
-        review_reasons = set(task_contract.get("review_reasons", ()))
-        execution_barriers = review_reasons - {"governance_review_route"}
+        execution_barriers = list(task_contract.get("execution_barriers", ()))
         if execution_barriers:
             return {
                 "status": "REVIEW",
                 "reason": "uncertainty_or_ambiguity_review",
-                "gaps": sorted(execution_barriers),
+                "gaps": execution_barriers,
             }
         return {"status": "AUTHORIZED", "reason": "required_competencies_resolved", "gaps": []}
 
