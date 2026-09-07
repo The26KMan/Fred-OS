@@ -31,6 +31,10 @@ class IdempotencyConflictError(GatewayError):
     pass
 
 
+class IdempotencyInProgressError(GatewayError):
+    """Another live gateway worker owns the same logical request."""
+
+
 @dataclass(frozen=True)
 class GatewayPrincipal:
     caller_id: str
@@ -62,6 +66,8 @@ class IdempotencyRecord:
     status: str
     command_id: str | None = None
     result_json: str | None = None
+    owner_token: str | None = None
+    lease_expires_at: float | None = None
 
 
 @dataclass(frozen=True)

@@ -18,6 +18,14 @@ max_chain_depth = 8
 allow_env_overrides = false
 state_store_path = "data/runtime_state.jsonl"
 journal_path = "data/runtime.wal.jsonl"
+lock_path = "data/runtime.tx.lock"
+lock_timeout_seconds = 30.0
+
+[gateway]
+idempotency_busy_timeout_ms = 10000
+idempotency_lease_seconds = 30.0
+idempotency_wait_seconds = 30.0
+idempotency_poll_seconds = 0.025
 
 [capability_policy]
 execution_maturities = ["implemented", "implemented_adapter", "tested_prototype_adapter", "kernel_governance"]

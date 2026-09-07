@@ -9,6 +9,7 @@ from .contracts import (
 )
 from .journal import RuntimeJournal
 from .kernel import RuntimeKernel
+from .locking import InterProcessRuntimeLock, RuntimeLockTimeout
 from .state import StateCapsule, StateStore
 
 __all__ = [
@@ -23,5 +24,7 @@ __all__ = [
     "StateCapsule",
     "StateStore",
     "RuntimeJournal",
+    "InterProcessRuntimeLock",
+    "RuntimeLockTimeout",
     "HealthResult",
 ]

@@ -47,10 +47,14 @@ def _build_gateway(args: argparse.Namespace, token: str) -> tuple[RuntimeKernel,
     gateway = CommandGateway(
         kernel,
         TokenAuthenticator.from_file(args.auth_registry),
-        IdempotencyStore(store_path),
+        IdempotencyStore(
+            store_path,
+            busy_timeout_ms=int(kernel.config.get("gateway.idempotency_busy_timeout_ms", 10_000)),
+            lease_seconds=float(kernel.config.get("gateway.idempotency_lease_seconds", 30.0)),
+            wait_seconds=float(kernel.config.get("gateway.idempotency_wait_seconds", 30.0)),
+            poll_seconds=float(kernel.config.get("gateway.idempotency_poll_seconds", 0.025)),
+        ),
     )
-    # Authenticate during process initialization so a bad configured MCP token
-    # fails before a transport begins accepting requests.
     gateway.authenticator.authenticate(token)
     return kernel, gateway
 
@@ -91,9 +95,6 @@ def main(argv: list[str] | None = None) -> int:
                 asyncio.run(run_stdio_server(server))
                 return 0
 
-            # Long-lived remote mode runs in the foreground and should be
-            # supervised by systemd, Docker, Kubernetes, or an equivalent host.
-            # One worker preserves the current single-writer runtime contract.
             try:
                 import uvicorn
             except ImportError as exc:  # pragma: no cover - packaging path

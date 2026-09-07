@@ -38,7 +38,7 @@ This is the preferred initial integration mode because it has no listening port,
 
 Use Streamable HTTP for remote or shared clients. `fred mcp serve --transport streamable-http` runs a foreground ASGI service; systemd, Docker, Kubernetes, or another process supervisor should own daemonization, restart policy, TLS termination, and external secret injection.
 
-The current runtime is single-writer, so M2 constrains the HTTP service to one worker and serializes calls inside one MCP process. Multi-worker or multi-process runtime dispatch remains out of scope until the WAL/StateCapsule layer has explicit concurrent-writer locking.
+M2.1 adds process-safe runtime transaction ownership and gateway idempotency coordination beneath this transport. The CLI nevertheless remains conservatively configured with one HTTP worker until the HTTP process-manager lifecycle itself is acceptance-tested. This keeps transport deployment policy separate from the now process-safe transactional substrate.
 
 ### SSE
 
@@ -81,7 +81,7 @@ Hosts that can persist a tool-call identity SHOULD send:
 }
 ```
 
-That value maps to the M1 idempotency store, allowing a retried MCP request to replay the prior `CommandResult` even if its JSON-RPC request id changes.
+That value maps to the M1/M2.1 idempotency store, allowing a retried MCP request to replay the prior `CommandResult` even if its JSON-RPC request id changes.
 
 M2 deliberately does not derive idempotency solely from tool arguments. Two legitimate calls may have identical arguments and still represent separate intended state transitions.
 
@@ -106,11 +106,17 @@ A runtime `BLOCKED` result is still a successful MCP transport response because 
 
 ## Concurrency
 
-M2 serializes calls through an `asyncio.Lock` and invokes synchronous `CommandGateway.execute()` on the same thread that owns the M1 SQLite idempotency connection. This preserves both the current single-writer RuntimeKernel contract and SQLite's thread-affinity contract.
+Within one MCP process, M2 still serializes calls through an `asyncio.Lock` and invokes synchronous `CommandGateway.execute()` on the event-loop/owner thread. This preserves deterministic ordering and avoids unnecessary cross-thread movement of synchronous runtime components.
 
-The synchronous execution may temporarily occupy the MCP event loop during a turn. Moving gateway execution to worker threads is intentionally deferred until M1 storage and RuntimeKernel concurrency are explicitly redesigned for cross-thread execution.
+M2.1 adds the cross-process layer beneath that local lock:
 
-This lock is not a substitute for M0 multi-process WAL locking. It only protects concurrent calls inside one MCP server process.
+- `InterProcessRuntimeLock` serializes BOOT authority and each full `TX_START -> TX_COMMIT/TX_ABORT` interval across OS processes.
+- each worker refreshes the latest committed `StateCapsule` after acquiring the lock and before executing a turn.
+- a StateCapsule compare-and-swap guard verifies that the transaction parent is still the authoritative journal/state-store tail before commit.
+- the gateway idempotency database uses SQLite WAL mode, busy timeouts, operation-scoped connections, owner tokens, renewable leases, and expired-owner reclamation.
+- POSIX `flock` ownership is released by the kernel when a process exits or is `SIGKILL`ed; lock-file JSON is diagnostic only and is never treated as authority.
+
+The runtime therefore remains **logically single-writer** while becoming **multi-process safe**: multiple workers may contend concurrently, but only one authoritative cognitive state mutation may execute at a time.
 
 ## CLI
 

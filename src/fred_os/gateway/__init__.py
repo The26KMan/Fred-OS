@@ -10,6 +10,7 @@ from .contracts import (
     GatewayRequest,
     GatewayResponse,
     IdempotencyConflictError,
+    IdempotencyInProgressError,
     IdempotencyRecord,
     SchemaValidationError,
     TokenRecord,
@@ -33,4 +34,5 @@ __all__ = [
     "SchemaValidationError",
     "CapabilityNotFoundError",
     "IdempotencyConflictError",
+    "IdempotencyInProgressError",
 ]

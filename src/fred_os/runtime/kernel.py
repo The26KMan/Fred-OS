@@ -19,6 +19,7 @@ from .contracts import (
 )
 from .governance import GovernanceLayer, GovernanceVerdict
 from .journal import RuntimeJournal
+from .locking import InterProcessRuntimeLock
 from .observability import ObservabilityStack
 from .registry import SystemRegistry
 from .routing import Route, Router
@@ -41,6 +42,7 @@ class RuntimeKernel:
     router: Router
     state_store: StateStore
     journal: RuntimeJournal
+    runtime_lock: InterProcessRuntimeLock
     current_capsule: StateCapsule
     booted_at: float
     task_planner: TaskCompetencyPlanner | None = None
@@ -72,53 +74,62 @@ class RuntimeKernel:
 
         configured_state = config.get("runtime.state_store_path", "data/runtime_state.jsonl")
         configured_journal = config.get("runtime.journal_path", "data/runtime.wal.jsonl")
+        configured_lock = config.get("runtime.lock_path", "data/runtime.tx.lock")
+        lock_path = Path(str(configured_lock))
+        if not lock_path.is_absolute():
+            lock_path = root / lock_path
+        runtime_lock = InterProcessRuntimeLock(
+            lock_path,
+            timeout_seconds=float(config.get("runtime.lock_timeout_seconds", 30.0)),
+        )
         state_store = StateStore(state_store_path or (root / str(configured_state)))
         journal = RuntimeJournal(journal_path or (root / str(configured_journal)))
 
         temporal_config = TemporalSphereConfig.from_runtime(config)
-        committed_ids = journal.committed_capsule_ids()
-        latest = state_store.latest_committed(committed_ids)
-        if latest is not None:
-            if latest.config_hash != config.config_hash:
-                memory.close()
-                raise RuntimeError(
-                    f"Committed StateCapsule config hash {latest.config_hash} does not match active config {config.config_hash}"
+        with runtime_lock:
+            committed_ids = journal.committed_capsule_ids()
+            latest = state_store.latest_committed(committed_ids)
+            if latest is not None:
+                if latest.config_hash != config.config_hash:
+                    memory.close()
+                    raise RuntimeError(
+                        f"Committed StateCapsule config hash {latest.config_hash} does not match active config {config.config_hash}"
+                    )
+                if session_id is not None and latest.session_id != session_id:
+                    memory.close()
+                    raise RuntimeError(
+                        f"Requested session {session_id} does not match committed runtime session {latest.session_id}"
+                    )
+                temporal = hydrate_temporal_state(latest.temporal_state, temporal_config)
+                current_capsule = latest
+                observability.emit(
+                    "STATE_HYDRATED",
+                    {"capsule_id": latest.capsule_id, "sequence": latest.sequence, "session_id": latest.session_id},
                 )
-            if session_id is not None and latest.session_id != session_id:
-                memory.close()
-                raise RuntimeError(
-                    f"Requested session {session_id} does not match committed runtime session {latest.session_id}"
+            else:
+                temporal = TemporalSphere(temporal_config)
+                if session_id is not None:
+                    temporal.session_id = session_id
+                current_capsule = StateCapsule.genesis(
+                    session_id=temporal.session_id,
+                    config_hash=config.config_hash,
+                    temporal_state=capture_temporal_state(temporal),
+                    memory_state=cls._memory_state(config),
+                    repository_state=cls._repository_state(config),
                 )
-            temporal = hydrate_temporal_state(latest.temporal_state, temporal_config)
-            current_capsule = latest
-            observability.emit(
-                "STATE_HYDRATED",
-                {"capsule_id": latest.capsule_id, "sequence": latest.sequence, "session_id": latest.session_id},
-            )
-        else:
-            temporal = TemporalSphere(temporal_config)
-            if session_id is not None:
-                temporal.session_id = session_id
-            current_capsule = StateCapsule.genesis(
-                session_id=temporal.session_id,
-                config_hash=config.config_hash,
-                temporal_state=capture_temporal_state(temporal),
-                memory_state=cls._memory_state(config),
-                repository_state=cls._repository_state(config),
-            )
-            state_store.append(current_capsule)
-            journal.append_entry(
-                "GENESIS_COMMIT",
-                {
-                    "capsule_id": current_capsule.capsule_id,
-                    "sequence": current_capsule.sequence,
-                    "logical_state_hash": current_capsule.logical_state_hash,
-                },
-            )
-            observability.emit(
-                "STATE_GENESIS",
-                {"capsule_id": current_capsule.capsule_id, "session_id": current_capsule.session_id},
-            )
+                state_store.append(current_capsule)
+                journal.append_entry(
+                    "GENESIS_COMMIT",
+                    {
+                        "capsule_id": current_capsule.capsule_id,
+                        "sequence": current_capsule.sequence,
+                        "logical_state_hash": current_capsule.logical_state_hash,
+                    },
+                )
+                observability.emit(
+                    "STATE_GENESIS",
+                    {"capsule_id": current_capsule.capsule_id, "session_id": current_capsule.session_id},
+                )
 
         observability.emit("TEMPORAL_READY", {"session_id": temporal.session_id, "turn": temporal.current_turn})
         registry = SystemRegistry(config)
@@ -141,20 +152,23 @@ class RuntimeKernel:
             router=router,
             state_store=state_store,
             journal=journal,
+            runtime_lock=runtime_lock,
             current_capsule=current_capsule,
             booted_at=time.time(),
             task_planner=TaskCompetencyPlanner(config) if planning_enabled else None,
             task_competency=TaskCompetencyOrchestrator(config) if competency_enabled else None,
             status="READY",
         )
-        kernel.reconcile_wal()
-        kernel.reconcile_committed_derivations()
+        with runtime_lock:
+            kernel._refresh_authoritative_state_locked(session_id=session_id)
+            kernel.reconcile_wal()
+            kernel.reconcile_committed_derivations()
         observability.emit(
             "SYSTEM_READY",
             {
                 "systems": len(checks),
                 "boot_order": order,
-                "capsule_id": current_capsule.capsule_id,
+                "capsule_id": kernel.current_capsule.capsule_id,
                 "task_planning": planning_enabled,
                 "task_competency": competency_enabled,
             },
@@ -225,12 +239,17 @@ class RuntimeKernel:
     def dispatch(self, envelope: CommandEnvelope) -> CommandResult:
         if self.status != "READY":
             raise RuntimeError(f"RuntimeKernel is not READY: {self.status}")
+        if envelope.target_capability not in {"runtime.process_turn", "s1.cognitive_map", "runtime.task_planning"}:
+            raise ValueError(f"Unsupported capability: {envelope.target_capability}")
+        with self.runtime_lock:
+            self._refresh_authoritative_state_locked(session_id=envelope.session_id)
+            return self._dispatch_locked(envelope)
+
+    def _dispatch_locked(self, envelope: CommandEnvelope) -> CommandResult:
         if envelope.session_id != self.current_capsule.session_id:
             raise ValueError(
                 f"Command session {envelope.session_id} does not match runtime session {self.current_capsule.session_id}"
             )
-        if envelope.target_capability not in {"runtime.process_turn", "s1.cognitive_map", "runtime.task_planning"}:
-            raise ValueError(f"Unsupported capability: {envelope.target_capability}")
 
         raw_input = str(envelope.payload.get("input", envelope.payload.get("text", "")))
         before = self.current_capsule
@@ -263,6 +282,7 @@ class RuntimeKernel:
             delta = self._build_delta(before, candidate, envelope.command_id, outputs)
             self.journal.append_entry("STATE_DELTA", normalize_for_hash(asdict(delta)))
 
+            self._assert_authoritative_tail(before)
             self.state_store.append(candidate)
             self.journal.append_entry(
                 "TX_COMMIT",
@@ -689,6 +709,51 @@ class RuntimeKernel:
             "after_state_hash": after.logical_state_hash,
         }
         return StateDelta(delta_id=f"delta-{canonical_hash(body)[:20]}", **body)
+
+    def _refresh_authoritative_state_locked(self, *, session_id: str | None = None) -> StateCapsule:
+        """Refresh this worker from the latest committed capsule while holding the runtime lock."""
+        committed_ids = self.journal.committed_capsule_ids()
+        latest = self.state_store.latest_committed(committed_ids)
+        if latest is None:
+            raise RuntimeError("runtime has no authoritative committed StateCapsule")
+        if latest.config_hash != self.config.config_hash:
+            raise RuntimeError(
+                f"Committed StateCapsule config hash {latest.config_hash} does not match active config {self.config.config_hash}"
+            )
+        if session_id is not None and latest.session_id != session_id:
+            raise RuntimeError(
+                f"Requested session {session_id} does not match committed runtime session {latest.session_id}"
+            )
+        if latest.capsule_id != self.current_capsule.capsule_id:
+            self.temporal = hydrate_temporal_state(
+                latest.temporal_state,
+                TemporalSphereConfig.from_runtime(self.config),
+            )
+            self.current_capsule = latest
+            self.observability.emit(
+                "STATE_REFRESHED_FROM_SHARED_AUTHORITY",
+                {"capsule_id": latest.capsule_id, "sequence": latest.sequence},
+            )
+        return latest
+
+    def _assert_authoritative_tail(self, before: StateCapsule) -> None:
+        """CAS guard: the transaction parent must still be the authoritative tail."""
+        latest_commit = self.journal.latest_commit()
+        if latest_commit is None:
+            raise RuntimeError("STATE_CAS_MISMATCH: journal has no authoritative commit")
+        committed_capsule_id = str(latest_commit.payload.get("capsule_id", ""))
+        committed = self.state_store.latest_committed(self.journal.committed_capsule_ids())
+        if (
+            committed_capsule_id != before.capsule_id
+            or committed is None
+            or committed.capsule_id != before.capsule_id
+            or committed.sequence != before.sequence
+        ):
+            observed = committed.capsule_id if committed is not None else committed_capsule_id or "NONE"
+            raise RuntimeError(
+                "STATE_CAS_MISMATCH: transaction parent "
+                f"{before.capsule_id}@{before.sequence} is no longer authoritative; observed {observed}"
+            )
 
     def reconcile_wal(self) -> list[dict[str, Any]]:
         interrupted = self.journal.uncommitted_transactions()
