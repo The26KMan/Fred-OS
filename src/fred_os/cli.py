@@ -11,6 +11,8 @@ import uuid
 
 from fred_os.gateway import CommandGateway, GatewayRequest, IdempotencyStore, TokenAuthenticator
 from fred_os.runtime import RuntimeKernel
+from fred_os.runtime.config import ConfigLoader
+from fred_os.runtime.locking import InterProcessRuntimeLock
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -39,24 +41,51 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _resolve_service_lock(root: Path, config) -> Path:
+    value = Path(str(config.get("service.bootstrap_lock_path", "data/service.bootstrap.lock")))
+    return value if value.is_absolute() else root / value
+
+
 def _build_gateway(args: argparse.Namespace, token: str) -> tuple[RuntimeKernel, CommandGateway]:
+    """Build process-local runtime/gateway resources under one bootstrap lock.
+
+    The bootstrap lock serializes schema creation/migration and initial runtime
+    authority inspection across workers. It is released before request serving
+    and never becomes transaction authority.
+    """
     root = Path(args.root).resolve()
     session_id = getattr(args, "session_id", None)
-    kernel = RuntimeKernel.boot(root_dir=root, profile=args.profile, session_id=session_id)
-    store_path = Path(args.idempotency_store) if args.idempotency_store else root / "data" / "gateway_idempotency.sqlite3"
-    gateway = CommandGateway(
-        kernel,
-        TokenAuthenticator.from_file(args.auth_registry),
-        IdempotencyStore(
-            store_path,
-            busy_timeout_ms=int(kernel.config.get("gateway.idempotency_busy_timeout_ms", 10_000)),
-            lease_seconds=float(kernel.config.get("gateway.idempotency_lease_seconds", 30.0)),
-            wait_seconds=float(kernel.config.get("gateway.idempotency_wait_seconds", 30.0)),
-            poll_seconds=float(kernel.config.get("gateway.idempotency_poll_seconds", 0.025)),
-        ),
+    config = ConfigLoader.build(root_dir=root, profile=args.profile)
+    bootstrap_lock = InterProcessRuntimeLock(
+        _resolve_service_lock(root, config),
+        timeout_seconds=float(config.get("service.bootstrap_timeout_seconds", 30.0)),
     )
-    gateway.authenticator.authenticate(token)
-    return kernel, gateway
+    kernel: RuntimeKernel | None = None
+    with bootstrap_lock:
+        try:
+            kernel = RuntimeKernel.boot(root_dir=root, profile=args.profile, session_id=session_id)
+            store_path = (
+                Path(args.idempotency_store)
+                if args.idempotency_store
+                else root / "data" / "gateway_idempotency.sqlite3"
+            )
+            gateway = CommandGateway(
+                kernel,
+                TokenAuthenticator.from_file(args.auth_registry),
+                IdempotencyStore(
+                    store_path,
+                    busy_timeout_ms=int(kernel.config.get("gateway.idempotency_busy_timeout_ms", 10_000)),
+                    lease_seconds=float(kernel.config.get("gateway.idempotency_lease_seconds", 30.0)),
+                    wait_seconds=float(kernel.config.get("gateway.idempotency_wait_seconds", 30.0)),
+                    poll_seconds=float(kernel.config.get("gateway.idempotency_poll_seconds", 0.025)),
+                ),
+            )
+            gateway.authenticator.authenticate(token)
+            return kernel, gateway
+        except Exception:
+            if kernel is not None:
+                kernel.shutdown()
+            raise
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -85,21 +114,57 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "mcp" and args.mcp_command == "serve":
-            from fred_os.mcp import MCPAdapterConfig, build_mcp_server, build_streamable_http_app, run_stdio_server
-
-            server = build_mcp_server(
-                gateway,
-                MCPAdapterConfig(token=token, session_id=args.session_id),
+            from fred_os.mcp import (
+                MCPAdapterConfig,
+                ServiceLifecycle,
+                ServiceProbeConfig,
+                ServiceReadinessProbe,
+                build_mcp_server,
+                build_streamable_http_app,
+                run_stdio_server,
+                serve_streamable_http,
             )
+
             if args.transport == "stdio":
+                server = build_mcp_server(
+                    gateway,
+                    MCPAdapterConfig(token=token, session_id=args.session_id),
+                )
                 asyncio.run(run_stdio_server(server))
                 return 0
 
             try:
-                import uvicorn
+                import uvicorn  # noqa: F401
             except ImportError as exc:  # pragma: no cover - packaging path
                 raise RuntimeError("streamable-http requires `pip install 'fred-os[http]'`") from exc
-            uvicorn.run(build_streamable_http_app(server), host=args.host, port=args.port, workers=1)
+
+            lifecycle = ServiceLifecycle()
+            server = build_mcp_server(
+                gateway,
+                MCPAdapterConfig(token=token, session_id=args.session_id),
+                lifecycle=lifecycle,
+            )
+            root = Path(args.root).resolve()
+            probe = ServiceReadinessProbe(
+                lifecycle,
+                gateway,
+                ServiceProbeConfig(
+                    bootstrap_lock_path=_resolve_service_lock(root, kernel.config),
+                    bootstrap_probe_timeout_seconds=float(
+                        kernel.config.get("service.bootstrap_probe_timeout_seconds", 0.02)
+                    ),
+                ),
+            )
+            app = build_streamable_http_app(server, lifecycle=lifecycle, readiness=probe)
+            asyncio.run(
+                serve_streamable_http(
+                    app,
+                    lifecycle,
+                    host=args.host,
+                    port=args.port,
+                    shutdown_grace_seconds=float(kernel.config.get("service.shutdown_grace_seconds", 30.0)),
+                )
+            )
             return 0
         return 2
     except Exception as exc:
