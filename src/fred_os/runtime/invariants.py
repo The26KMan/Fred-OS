@@ -107,9 +107,15 @@ class InvariantChecker:
 
     @staticmethod
     def _check_task_competency(config: RuntimeConfig) -> None:
-        threshold = float(config.get("task_competency.uncertainty_review_threshold", 1.0))
-        if not 0 <= threshold <= 1:
+        advisory = float(config.get("task_competency.uncertainty_review_threshold", 1.0))
+        execution = float(config.get("task_competency.execution_review_threshold", 1.0))
+        if not 0 <= advisory <= 1:
             raise ConfigError("I-TCOL-01: uncertainty_review_threshold must be in [0, 1]")
+        if not 0 <= execution <= 1:
+            raise ConfigError("I-TCOL-04: execution_review_threshold must be in [0, 1]")
+        if execution < advisory:
+            raise ConfigError("I-TCOL-05: execution_review_threshold must be >= uncertainty_review_threshold")
+
         routes = config.get("protocol.routes", {})
         route_competencies = config.get("task_competency.route_competencies", {})
         providers = config.get("task_competency.competency_providers", {})

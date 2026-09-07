@@ -247,6 +247,9 @@ class RuntimeKernel:
 
         try:
             outputs, receipts = self._execute_turn(raw_input, envelope.command_id)
+            if isinstance(outputs.get("rejection"), Mapping):
+                return self._abort_rejected(envelope, before, outputs, receipts)
+
             temporal_state = capture_temporal_state(self.temporal)
             receipt_hashes = tuple(receipt.compute_hash() for receipt in receipts)
             candidate = StateCapsule.next(
@@ -281,7 +284,6 @@ class RuntimeKernel:
                 shard_id = str(temporal_receipt.get("shard_id", ""))
                 temporal_receipt["linked_sources"] = linked.get(shard_id, [])
 
-            status = "REJECTED" if outputs.get("verdict") and getattr(outputs["verdict"], "decision", "") == "BLOCK" else "SUCCESS"
             self.observability.emit(
                 "TX_COMMITTED",
                 {
@@ -293,7 +295,7 @@ class RuntimeKernel:
             )
             return CommandResult(
                 command_id=envelope.command_id,
-                status=status,
+                status="SUCCESS",
                 outputs=outputs,
                 receipts=tuple(receipts),
                 delta=delta,
@@ -307,6 +309,38 @@ class RuntimeKernel:
             )
             self.observability.emit("TX_ABORTED", {"command_id": envelope.command_id, "error": repr(exc)})
             raise
+
+    def _abort_rejected(
+        self,
+        envelope: CommandEnvelope,
+        before: StateCapsule,
+        outputs: dict[str, Any],
+        receipts: list[ExecutionReceipt],
+    ) -> CommandResult:
+        rejection = dict(outputs.get("rejection", {}))
+        code = str(rejection.get("code", "RUNTIME_REJECT"))
+        self.temporal = hydrate_temporal_state(before.temporal_state, TemporalSphereConfig.from_runtime(self.config))
+        self.journal.append_entry(
+            "TX_ABORT",
+            {
+                "command_id": envelope.command_id,
+                "before_capsule_id": before.capsule_id,
+                "reason_code": code,
+                "semantic_rejection": True,
+            },
+        )
+        self.observability.emit(
+            "TX_REJECTED",
+            {"command_id": envelope.command_id, "reason_code": code, "capsule_id": before.capsule_id},
+        )
+        return CommandResult(
+            command_id=envelope.command_id,
+            status="BLOCKED",
+            outputs=outputs,
+            receipts=tuple(receipts),
+            delta=None,
+            state_capsule_id=before.capsule_id,
+        )
 
     def _execute_turn(self, raw_input: str, command_id: str) -> tuple[dict[str, Any], list[ExecutionReceipt]]:
         receipts: list[ExecutionReceipt] = []
@@ -349,7 +383,16 @@ class RuntimeKernel:
         verdict = execute("Governance", "pre_scan", {"input": raw_input}, lambda: self.governance.pre_scan(raw_input))
         if verdict.decision == "BLOCK":
             self.observability.emit("GOVERNANCE_BLOCK", {"reason": verdict.rationale})
-            return {"verdict": verdict, "response": "The runtime blocked this request for safe handling."}, receipts
+            return {
+                "verdict": verdict,
+                "governance_verdict": verdict,
+                "rejection": {
+                    "code": "GOVERNANCE_REJECT",
+                    "reason": verdict.rationale,
+                    "stage": "Governance",
+                },
+                "response": "The runtime blocked this request for safe handling.",
+            }, receipts
 
         s1 = execute(
             "S1",
@@ -432,23 +475,34 @@ class RuntimeKernel:
         if assessment is not None:
             outputs["TASK_COMPETENCY"] = assessment
 
-        authorization_blocked = bool(
-            assessment
-            and assessment.get("execution_authorization", {}).get("status") == "BLOCKED"
+        authorization_status = (
+            assessment.get("execution_authorization", {}).get("status") if assessment else "AUTHORIZED"
         )
-        if not capability_report["ready"] or authorization_blocked:
+        if not capability_report["ready"] or authorization_status in {"BLOCKED", "REVIEW"}:
             gaps = list(capability_report.get("hard_gate_missing", ())) + list(capability_report.get("required_missing", ()))
             if assessment:
                 gaps.extend(assessment.get("execution_authorization", {}).get("gaps", ()))
             gaps = list(dict.fromkeys(str(item) for item in gaps))
-            blocked = GovernanceVerdict(
-                "BLOCK",
-                f"Route '{route.name}' has unresolved required capabilities: {', '.join(gaps) or 'unspecified gap'}.",
-                0.0,
-            )
+
+            if not capability_report["ready"] or authorization_status == "BLOCKED":
+                code = "CAPABILITY_UNAVAILABLE"
+                decision = "BLOCK"
+                rationale = f"Route '{route.name}' has unresolved required capabilities: {', '.join(gaps) or 'unspecified gap'}."
+            else:
+                code = "REVIEW_REQUIRED"
+                decision = "REVIEW"
+                rationale = f"Route '{route.name}' requires review before downstream execution: {', '.join(gaps) or 'uncertainty or ambiguity'} ."
+
+            blocked = GovernanceVerdict(decision, rationale, 0.0, decision == "REVIEW")
             self.observability.emit(
-                "CAPABILITY_GAP",
-                {"route": route.name, "route_key": route.key, "gaps": gaps, "capability_report": capability_report},
+                "CAPABILITY_GAP" if code == "CAPABILITY_UNAVAILABLE" else "EXECUTION_REVIEW_REQUIRED",
+                {
+                    "route": route.name,
+                    "route_key": route.key,
+                    "gaps": gaps,
+                    "capability_report": capability_report,
+                    "authorization_status": authorization_status,
+                },
             )
             return {
                 "verdict": blocked,
@@ -457,7 +511,12 @@ class RuntimeKernel:
                 "capability_report": capability_report,
                 "task_competency": assessment,
                 "outputs": outputs,
-                "response": "Execution was stopped because declared required capabilities are not ready.",
+                "rejection": {"code": code, "reason": rationale, "stage": "TCOL" if code == "REVIEW_REQUIRED" else "CapabilityRegistry"},
+                "response": (
+                    "Execution requires review before downstream providers run."
+                    if code == "REVIEW_REQUIRED"
+                    else "Execution was stopped because declared required capabilities are not ready."
+                ),
             }, receipts
 
         context: dict[str, Any] = {
@@ -507,6 +566,19 @@ class RuntimeKernel:
                 outputs[system_id] = value
                 context[system_id.lower()] = value
             else:
+                receipts.append(
+                    ExecutionReceipt.create(
+                        command_id=command_id,
+                        sequence=len(receipts) + 1,
+                        component=system_id,
+                        action="skip_optional",
+                        inputs={"route": route.name, "reasons": status["reasons"]},
+                        outputs={"status": "skipped", "reason": "optional capability is not execution-ready"},
+                        execution_time_ms=0.0,
+                        status="SKIPPED_OPTIONAL",
+                        parent_receipt_id=receipts[-1].receipt_id if receipts else None,
+                    )
+                )
                 self.observability.emit(
                     "OPTIONAL_CAPABILITY_SKIPPED",
                     {"route": route.name, "system_id": system_id, "reasons": status["reasons"]},
@@ -527,6 +599,11 @@ class RuntimeKernel:
                     "capability_report": capability_report,
                     "task_competency": assessment,
                     "outputs": outputs,
+                    "rejection": {
+                        "code": "QESAE_REJECT",
+                        "reason": blocked.rationale,
+                        "stage": "S13",
+                    },
                     "response": "Execution was stopped because QESAE verification was incomplete.",
                 }, receipts
             self.observability.emit(

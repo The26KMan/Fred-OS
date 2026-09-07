@@ -109,6 +109,7 @@ validation_markers = ["test", "validate", "acceptance", "done"]
 
 [task_competency]
 uncertainty_review_threshold = 0.55
+execution_review_threshold = 0.90
 objective_terms = ["design", "build", "implement", "migrate", "analyze", "draft", "create", "provide", "map", "assess"]
 constraint_terms = ["must", "should", "require", "without", "only", "before", "after", "by", "include"]
 objective_required_task_classes = ["systemic", "creative", "artistic"]

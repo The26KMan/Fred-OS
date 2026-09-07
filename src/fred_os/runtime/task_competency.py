@@ -9,9 +9,9 @@ from .routing import Route
 
 
 class TaskCompetencyOrchestrator:
-    """Convert a task state and provider evidence into an executable authorization.
+    """Convert task state and provider evidence into an execution authorization.
 
-    This layer preserves the original Task Understanding → Competency Mapping →
+    The layer preserves the Task Understanding → Competency Mapping →
     Integration/Synthesis pattern as explicit, config-driven runtime data. It never
     invokes providers and never overrides the kernel GovernanceLayer.
     """
@@ -46,17 +46,37 @@ class TaskCompetencyOrchestrator:
         gaps: list[str] = []
         if task_class in required_classes and not objectives:
             gaps.append("objective_not_detected")
+
+        context_graph = s1_state.get("context_graph", {})
+        ambiguities = context_graph.get("ambiguities", ()) if isinstance(context_graph, Mapping) else ()
+        if ambiguities:
+            gaps.append("contradictory_constraints")
+
+        advisory_threshold = float(self.config.get("task_competency.uncertainty_review_threshold", 1.0))
+        execution_threshold = float(self.config.get("task_competency.execution_review_threshold", 1.0))
+        review_reasons: list[str] = []
+        execution_barriers: list[str] = []
+        if str(governance_verdict["decision"]) == "REVIEW":
+            review_reasons.append("governance_review_route")
+        if uncertainty >= advisory_threshold:
+            review_reasons.append("elevated_uncertainty")
+        if uncertainty >= execution_threshold:
+            execution_barriers.append("critical_uncertainty")
+        if ambiguities:
+            review_reasons.append("structured_ambiguity")
+            execution_barriers.append("structured_ambiguity")
+
         return {
             "task_class": task_class,
             "objectives": objectives,
             "constraints": constraints,
             "explicit_systems": explicit_systems,
             "uncertainty": uncertainty,
-            "requires_review": (
-                str(governance_verdict["decision"]) == "REVIEW"
-                or uncertainty >= float(self.config.get("task_competency.uncertainty_review_threshold", 1.0))
-            ),
-            "gaps": gaps,
+            "requires_review": bool(review_reasons or execution_barriers),
+            "review_reasons": list(dict.fromkeys(review_reasons)),
+            "execution_barriers": list(dict.fromkeys(execution_barriers)),
+            "ambiguities": list(ambiguities),
+            "gaps": list(dict.fromkeys(gaps)),
         }
 
     def map_competencies(
@@ -126,6 +146,14 @@ class TaskCompetencyOrchestrator:
                 "status": "REVIEW",
                 "reason": "task_contract_incomplete",
                 "gaps": list(task_contract["gaps"]),
+            }
+
+        execution_barriers = list(task_contract.get("execution_barriers", ()))
+        if execution_barriers:
+            return {
+                "status": "REVIEW",
+                "reason": "uncertainty_or_ambiguity_review",
+                "gaps": execution_barriers,
             }
         return {"status": "AUTHORIZED", "reason": "required_competencies_resolved", "gaps": []}
 
