@@ -10,13 +10,15 @@ readme = "README.md"
 requires-python = ">=3.11"
 authors = [{name = "Kamahni Huck"}]
 license = {text = "Proprietary"}
-dependencies = []
+dependencies = ["mcp>=2,<3"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+http = ["uvicorn>=0.30"]
 
 [project.scripts]
 fred-os = "fred_os.cli:main"
+fred = "fred_os.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
