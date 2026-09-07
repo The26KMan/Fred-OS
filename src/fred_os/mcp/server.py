@@ -69,11 +69,12 @@ def build_mcp_server(gateway: CommandGateway, config: MCPAdapterConfig) -> Serve
             session_id=config.session_id,
         )
         try:
-            # RuntimeKernel is currently a single-writer transactional runtime.
-            # Serialize tool dispatches at this transport boundary until the
-            # runtime gains explicit concurrent-writer locking.
+            # RuntimeKernel and the M1 SQLite idempotency connection are both
+            # single-writer/thread-affine today. Keep dispatch on their owning
+            # event-loop thread and serialize calls until a later concurrency
+            # milestone deliberately changes those contracts.
             async with dispatch_lock:
-                response = await asyncio.to_thread(gateway.execute, request)
+                response = gateway.execute(request)
         except GatewayError as exc:
             failure = {
                 "status": "ERROR",
