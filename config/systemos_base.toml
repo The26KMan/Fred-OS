@@ -27,6 +27,12 @@ idempotency_lease_seconds = 30.0
 idempotency_wait_seconds = 30.0
 idempotency_poll_seconds = 0.025
 
+[service]
+bootstrap_lock_path = "data/service.bootstrap.lock"
+bootstrap_timeout_seconds = 30.0
+bootstrap_probe_timeout_seconds = 0.02
+shutdown_grace_seconds = 30.0
+
 [capability_policy]
 execution_maturities = ["implemented", "implemented_adapter", "tested_prototype_adapter", "kernel_governance"]
 hard_gate_maturities = ["implemented", "implemented_adapter", "kernel_governance"]
