@@ -15,6 +15,8 @@ protected_keys = ["governance.pass_floor", "governance.review_floor", "governanc
 active = true
 max_chain_depth = 8
 allow_env_overrides = false
+state_store_path = "data/runtime_state.jsonl"
+journal_path = "data/runtime.wal.jsonl"
 
 [protocol]
 default_mode = "CHAINING"
