@@ -3,7 +3,7 @@
 The semantic graph engine remains in `system1_cognitive_mapping.py`. This
 adapter adds the System-OS situation model required by TSC and downstream
 routing: entities, objectives, constraints, questions, temporal references,
-gaps, and turn-state signals.
+gaps, ambiguity, and turn-state signals.
 """
 from __future__ import annotations
 
@@ -27,6 +27,9 @@ class SituationalLayer:
         r"\bby\s+(?:\w+\s+)?\d{1,2}(?:,?\s+\d{4})?", r"\bdeadline\b[^.,;!?]{0,100}",
         r"\binclude\b[^.,;!?]{0,100}", r"\bno\s+more\s+than\b[^.,;!?]{0,60}",
     )
+    POSITIVE_CONSTRAINT = re.compile(r"\b(?:must|should|required\s+to)\s+(?:include|use|enable|keep|retain)\s+(.+)$", re.I)
+    NEGATIVE_CONSTRAINT = re.compile(r"\b(?:must|should)\s+not\s+(?:include|use|enable|keep|retain)\s+(.+)$", re.I)
+    EXCLUSION_CONSTRAINT = re.compile(r"\b(?:must|should)\s+(?:exclude|omit|disable|remove)\s+(.+)$", re.I)
 
     def build(self, text: str, semantic: Mapping[str, Any], temporal: Any | None = None) -> dict[str, Any]:
         entities = {
@@ -38,12 +41,15 @@ class SituationalLayer:
             "concept_nodes": [item.get("normalized_concept", "") for item in semantic.get("enriched_concepts", []) if isinstance(item, Mapping)],
         }
         constraints = sorted({match.group(0).strip() for pattern in self.CONSTRAINT_PATTERNS for match in re.finditer(pattern, text, flags=re.I)})
+        ambiguities = self._ambiguities(constraints)
         tokens = {item.lower() for item in re.findall(r"[A-Za-z][A-Za-z_-]*", text)}
         objectives = sorted(tokens & self.OBJECTIVE_WORDS)
         questions = [text.strip()] if "?" in text or text.strip().lower().startswith(self.QUESTION_STARTERS) else []
         temporal_refs = entities["dates"]
         state = self._state(questions, constraints, objectives)
         gaps = self._gaps(constraints, objectives, entities, semantic)
+        for ambiguity in ambiguities:
+            gaps.append({"type": ambiguity["type"], "reason": ambiguity["reason"]})
         uncertainty = self._uncertainty(semantic, questions, entities, gaps)
         signals = {
             "uncertainty": uncertainty["score"],
@@ -55,6 +61,7 @@ class SituationalLayer:
             "entities": entities,
             "objectives": objectives,
             "constraints": constraints,
+            "ambiguities": ambiguities,
             "open_questions": questions,
             "temporal_refs": temporal_refs,
             "temporal_state": state,
@@ -63,6 +70,38 @@ class SituationalLayer:
             "signals": signals,
             "uncertainty": uncertainty,
         }
+
+    @classmethod
+    def _ambiguities(cls, constraints: list[str]) -> list[dict[str, str]]:
+        positive: dict[str, str] = {}
+        negative: dict[str, str] = {}
+
+        def normalize_target(value: str) -> str:
+            return " ".join(re.findall(r"[A-Za-z0-9_-]+", value.lower())).strip()
+
+        for constraint in constraints:
+            negative_match = cls.NEGATIVE_CONSTRAINT.search(constraint) or cls.EXCLUSION_CONSTRAINT.search(constraint)
+            if negative_match:
+                target = normalize_target(negative_match.group(1))
+                if target:
+                    negative[target] = constraint
+                continue
+            positive_match = cls.POSITIVE_CONSTRAINT.search(constraint)
+            if positive_match:
+                target = normalize_target(positive_match.group(1))
+                if target:
+                    positive[target] = constraint
+
+        ambiguities: list[dict[str, str]] = []
+        for target in sorted(set(positive).intersection(negative)):
+            ambiguities.append({
+                "type": "contradictory_constraint",
+                "target": target,
+                "positive": positive[target],
+                "negative": negative[target],
+                "reason": f"Conflicting constraints both require and prohibit '{target}'.",
+            })
+        return ambiguities
 
     @staticmethod
     def _state(questions: list[str], constraints: list[str], objectives: list[str]) -> str:
@@ -119,7 +158,7 @@ class System1RuntimeAdapter(SystemPlugin):
         context_text.extend(str(item) for item in payload.get("context", ()))
         result = self.mapper.process(text, context=tuple(context_text))
         situation = self.situational.build(text, result, temporal)
-        result["context_graph"] = {key: situation[key] for key in ("entities", "objectives", "constraints", "open_questions", "temporal_refs", "temporal_state", "turn_id")}
+        result["context_graph"] = {key: situation[key] for key in ("entities", "objectives", "constraints", "ambiguities", "open_questions", "temporal_refs", "temporal_state", "turn_id")}
         result["temporal_state"] = situation["temporal_state"]
         result["gaps"] = situation["gaps"]
         result["signals"] = situation["signals"]
