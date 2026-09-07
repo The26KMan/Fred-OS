@@ -27,6 +27,9 @@ from .tools import list_authorized_tools
 from .translator import format_gateway_response_for_mcp, mcp_call_to_gateway_request
 
 
+FREDOS_IDEMPOTENCY_META_KEY = "fredos/idempotencyKey"
+
+
 @dataclass(frozen=True)
 class MCPAdapterConfig:
     token: str
@@ -55,11 +58,14 @@ def build_mcp_server(gateway: CommandGateway, config: MCPAdapterConfig) -> Serve
         params: CallToolRequestParams,
     ) -> CallToolResult:
         arguments = params.arguments or {}
+        meta = params.meta or {}
+        host_idempotency = meta.get(FREDOS_IDEMPOTENCY_META_KEY)
+        tool_call_id = str(host_idempotency) if host_idempotency else str(ctx.request_id)
         request = mcp_call_to_gateway_request(
             tool_name=params.name,
             arguments=arguments,
             token=config.token,
-            tool_call_id=str(ctx.request_id),
+            tool_call_id=tool_call_id,
             session_id=config.session_id,
         )
         try:
