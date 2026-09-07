@@ -106,7 +106,9 @@ A runtime `BLOCKED` result is still a successful MCP transport response because 
 
 ## Concurrency
 
-M2 serializes calls through an `asyncio.Lock` before invoking synchronous `CommandGateway.execute()` in a worker thread. This protects the current single-writer kernel contract while keeping the MCP event loop responsive.
+M2 serializes calls through an `asyncio.Lock` and invokes synchronous `CommandGateway.execute()` on the same thread that owns the M1 SQLite idempotency connection. This preserves both the current single-writer RuntimeKernel contract and SQLite's thread-affinity contract.
+
+The synchronous execution may temporarily occupy the MCP event loop during a turn. Moving gateway execution to worker threads is intentionally deferred until M1 storage and RuntimeKernel concurrency are explicitly redesigned for cross-thread execution.
 
 This lock is not a substitute for M0 multi-process WAL locking. It only protects concurrent calls inside one MCP server process.
 
