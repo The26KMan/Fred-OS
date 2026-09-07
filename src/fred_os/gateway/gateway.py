@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import time
 import uuid
 from typing import Any
 
@@ -14,6 +15,7 @@ from .contracts import (
     GatewayError,
     GatewayRequest,
     GatewayResponse,
+    IdempotencyInProgressError,
     IdempotencyRecord,
     SchemaValidationError,
     deserialize_command_result,
@@ -58,25 +60,61 @@ class CommandGateway:
                 "payload": request.payload,
             }
         )
+        command_id = request.command_id or f"cmd-{uuid.uuid4().hex}"
+        owner_token = self.idempotency_store.new_owner_token()
 
-        existing = self.idempotency_store.get(principal.caller_id, request.idempotency_key)
-        if existing is not None:
+        while True:
+            existing = self.idempotency_store.get(principal.caller_id, request.idempotency_key)
+            if existing is None:
+                record, acquired = self.idempotency_store.reserve_owned(
+                    principal.caller_id,
+                    request.idempotency_key,
+                    request_hash,
+                    command_id,
+                    owner_token,
+                )
+                if acquired:
+                    break
+                existing = record
+
             self.idempotency_store._assert_same_request(existing, request_hash)
             if existing.status == "COMPLETE":
                 result = deserialize_command_result(self.idempotency_store.decode_result(existing))
                 return GatewayResponse(principal.caller_id, True, result)
-            recovered = self._recover_pending(existing)
+
+            # A live worker owns this logical request. Wait for its result rather
+            # than deleting or stealing the reservation. A dead worker's lease
+            # expires and may then be recovered/reclaimed deterministically.
+            observed = self.idempotency_store.wait_for_change(
+                principal.caller_id,
+                request.idempotency_key,
+                request_hash,
+            )
+            if observed is None:
+                continue
+            if observed.status == "COMPLETE":
+                result = deserialize_command_result(self.idempotency_store.decode_result(observed))
+                return GatewayResponse(principal.caller_id, True, result)
+
+            lease_expired = (observed.lease_expires_at or 0.0) <= time.time()
+            if not lease_expired:
+                raise IdempotencyInProgressError(
+                    f"idempotency key {request.idempotency_key!r} is still owned by another live worker"
+                )
+
+            recovered = self._recover_pending(observed)
             if recovered is not None:
                 return GatewayResponse(principal.caller_id, True, recovered)
-            self.idempotency_store.release_pending(principal.caller_id, request.idempotency_key, request_hash)
+            if self.idempotency_store.claim_if_expired(
+                principal.caller_id,
+                request.idempotency_key,
+                request_hash,
+                command_id,
+                owner_token,
+            ):
+                break
+            # Another waiter won the expired lease race; observe the new owner.
 
-        command_id = request.command_id or f"cmd-{uuid.uuid4().hex}"
-        self.idempotency_store.reserve(
-            principal.caller_id,
-            request.idempotency_key,
-            request_hash,
-            command_id,
-        )
         envelope = CommandEnvelope(
             command_id=command_id,
             target_capability=request.target_capability,
@@ -87,23 +125,35 @@ class CommandGateway:
             request_fingerprint=request_hash,
         )
         try:
-            runtime_result = self.kernel.dispatch(envelope)
+            with self.idempotency_store.lease_guard(
+                principal.caller_id,
+                request.idempotency_key,
+                request_hash,
+                owner_token,
+            ):
+                runtime_result = self.kernel.dispatch(envelope)
         except Exception:
-            self.idempotency_store.release_pending(principal.caller_id, request.idempotency_key, request_hash)
+            self.idempotency_store.release_owned(
+                principal.caller_id,
+                request.idempotency_key,
+                request_hash,
+                owner_token,
+            )
             raise
 
         result_payload = serialize_command_result(runtime_result)
-        self.idempotency_store.finalize(
+        self.idempotency_store.finalize_owned(
             principal.caller_id,
             request.idempotency_key,
             request_hash,
+            owner_token,
             result_payload,
         )
         normalized = deserialize_command_result(result_payload)
         return GatewayResponse(principal.caller_id, False, normalized)
 
     def _recover_pending(self, record: IdempotencyRecord):
-        """Recover future journal-embedded results, or refuse duplicate execution after a known commit."""
+        """Recover journal-embedded results, or refuse duplicate execution after a known commit."""
         for entry in reversed(self.kernel.journal.entries()):
             payload = entry.payload
             if str(payload.get("command_id", "")) != str(record.command_id or ""):
