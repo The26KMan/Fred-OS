@@ -52,18 +52,23 @@ class TaskCompetencyOrchestrator:
         if ambiguities:
             gaps.append("contradictory_constraints")
 
-        requires_review = (
-            str(governance_verdict["decision"]) == "REVIEW"
-            or uncertainty >= float(self.config.get("task_competency.uncertainty_review_threshold", 1.0))
-            or bool(ambiguities)
-        )
+        threshold = float(self.config.get("task_competency.uncertainty_review_threshold", 1.0))
+        review_reasons: list[str] = []
+        if str(governance_verdict["decision"]) == "REVIEW":
+            review_reasons.append("governance_review_route")
+        if uncertainty >= threshold:
+            review_reasons.append("high_uncertainty")
+        if ambiguities:
+            review_reasons.append("structured_ambiguity")
+
         return {
             "task_class": task_class,
             "objectives": objectives,
             "constraints": constraints,
             "explicit_systems": explicit_systems,
             "uncertainty": uncertainty,
-            "requires_review": requires_review,
+            "requires_review": bool(review_reasons),
+            "review_reasons": review_reasons,
             "ambiguities": list(ambiguities),
             "gaps": list(dict.fromkeys(gaps)),
         }
@@ -136,11 +141,14 @@ class TaskCompetencyOrchestrator:
                 "reason": "task_contract_incomplete",
                 "gaps": list(task_contract["gaps"]),
             }
-        if task_contract.get("requires_review"):
+
+        review_reasons = set(task_contract.get("review_reasons", ()))
+        execution_barriers = review_reasons - {"governance_review_route"}
+        if execution_barriers:
             return {
                 "status": "REVIEW",
-                "reason": "uncertainty_or_governance_review",
-                "gaps": [],
+                "reason": "uncertainty_or_ambiguity_review",
+                "gaps": sorted(execution_barriers),
             }
         return {"status": "AUTHORIZED", "reason": "required_competencies_resolved", "gaps": []}
 
