@@ -88,6 +88,8 @@ class CommandEnvelope:
     session_id: str
     idempotency_key: str
     timestamp: float = field(default_factory=time.time)
+    caller_id: str | None = None
+    request_fingerprint: str | None = None
 
 
 @dataclass(frozen=True)
