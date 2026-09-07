@@ -152,9 +152,6 @@ class ServiceReadinessProbe:
             reasons.append(f"idempotency_store:{exc.__class__.__name__}")
             details["idempotency_store"] = "unavailable"
 
-        # A separate bootstrap/migration lock distinguishes deployment startup
-        # work from ordinary runtime transaction contention. /readyz should not
-        # fail merely because another worker is executing a normal turn.
         try:
             probe_lock = InterProcessRuntimeLock(
                 self.config.bootstrap_lock_path,
@@ -168,9 +165,6 @@ class ServiceReadinessProbe:
             reasons.append("bootstrap_lock:busy")
             details["bootstrap_lock"] = "busy"
 
-        # Synchronize this worker's read view with the authoritative capsule
-        # while holding the same runtime lock used by mutations. This changes
-        # only process-local hydration state; TX_COMMIT remains the authority.
         try:
             runtime_probe_lock = InterProcessRuntimeLock(
                 self.gateway.kernel.runtime_lock.path,
@@ -184,8 +178,6 @@ class ServiceReadinessProbe:
                 )
                 details["state_tail"] = latest.capsule_id
         except RuntimeLockTimeout:
-            # Another worker is inside an authoritative transaction. That is
-            # normal coordinated contention, not a readiness failure.
             details["state_tail"] = "transaction_busy"
         except Exception as exc:
             reasons.append(f"state_tail:{exc.__class__.__name__}")
@@ -223,12 +215,7 @@ class ProbeASGIApp:
 
 
 def install_drain_signal_handlers(lifecycle: ServiceLifecycle, stop_event: threading.Event) -> dict[int, Any]:
-    """Install non-raising SIGTERM/SIGINT handlers and return previous handlers.
-
-    The handler only marks the worker draining. Because it does not raise or
-    cancel the active call, a synchronous in-flight RuntimeKernel transaction
-    continues until its TX_COMMIT/TX_ABORT boundary before service shutdown.
-    """
+    """Install non-raising SIGTERM/SIGINT handlers and return previous handlers."""
     lifecycle._assert_owner()
     previous: dict[int, Any] = {}
 
@@ -270,8 +257,15 @@ async def serve_streamable_http(
     host: str,
     port: int,
     shutdown_grace_seconds: float = 30.0,
+    drain_quiesce_seconds: float = 0.25,
 ) -> None:
-    """Run one supervised HTTP worker with drain-aware signal semantics."""
+    """Run one supervised HTTP worker with drain-aware signal semantics.
+
+    After active cognitive work drains, the listener remains available for a
+    brief transport-quiescence window. MCP teardown/termination requests can
+    complete during this interval, while new FRED tool calls are still refused
+    by ``ServiceLifecycle.request_scope`` because the worker is DRAINING.
+    """
     import uvicorn
 
     lifecycle._assert_owner()
@@ -282,8 +276,6 @@ async def serve_streamable_http(
     )
     serve_task = asyncio.create_task(server.serve())
     try:
-        # Do not advertise readiness until the ASGI server has actually bound
-        # its socket and completed startup/lifespan initialization.
         while not server.started and not serve_task.done() and not stop_event.is_set():
             await asyncio.sleep(0.01)
         if server.started and not stop_event.is_set():
@@ -293,10 +285,9 @@ async def serve_streamable_http(
             await asyncio.sleep(0.05)
 
         if stop_event.is_set():
-            # Signal handler already marked DRAINING without interrupting any
-            # active synchronous gateway transaction. New MCP calls are refused
-            # by ServiceLifecycle.request_scope().
             idle = lifecycle.wait_for_idle(shutdown_grace_seconds)
+            if idle and drain_quiesce_seconds > 0:
+                await asyncio.sleep(min(float(drain_quiesce_seconds), max(float(shutdown_grace_seconds), 0.0)))
             server.should_exit = True
             if not idle:
                 server.force_exit = True
