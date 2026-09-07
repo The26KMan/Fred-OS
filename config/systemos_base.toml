@@ -1,0 +1,166 @@
+[meta]
+schema_version = "2.1"
+revision = "fred-os-vnext"
+profile = "production"
+tenant_id = "kamahni"
+project_id = "fred-os"
+
+[governance]
+pass_floor = 0.75
+review_floor = 0.50
+block_ceiling = 0.25
+kernel_system_id = "S8"
+protected_keys = ["governance.pass_floor", "governance.review_floor", "governance.block_ceiling", "runtime.active"]
+
+[runtime]
+active = true
+max_chain_depth = 8
+allow_env_overrides = false
+state_store_path = "data/runtime_state.jsonl"
+journal_path = "data/runtime.wal.jsonl"
+
+[capability_policy]
+execution_maturities = ["implemented", "implemented_adapter", "tested_prototype_adapter", "kernel_governance"]
+hard_gate_maturities = ["implemented", "implemented_adapter", "kernel_governance"]
+
+[protocol]
+default_mode = "CHAINING"
+allow_genius_escalation = true
+
+[protocol.route_policy]
+block = "safety"
+review = "deep_review"
+default = "default"
+
+[protocol.task_class_routes]
+creative = "creative"
+artistic = "creative"
+
+[protocol.routes.safety]
+name = "safety"
+systems = ["S8"]
+hard_gate_systems = ["S8"]
+optional_systems = []
+reason = "governance blocked route"
+
+[protocol.routes.deep_review]
+name = "deep_review"
+systems = ["S1", "S2", "S5", "S7", "S8", "S9", "S13"]
+hard_gate_systems = ["S8", "S13"]
+optional_systems = []
+reason = "elevated evidence review requires QESAE verification"
+
+[protocol.routes.creative]
+name = "creative"
+systems = ["S1", "S5", "S8", "S9"]
+hard_gate_systems = ["S8"]
+optional_systems = ["S10"]
+reason = "creative task class with governance baseline"
+
+[protocol.routes.default]
+name = "CHAINING"
+systems = ["S1", "S2", "S6", "S7", "S8"]
+hard_gate_systems = ["S8"]
+optional_systems = []
+reason = "default configured protocol"
+
+[memory]
+repository_path = "data/fred_os_memory.sqlite3"
+working_limit = 7
+contextual_limit = 50
+episodic_limit = 1000
+heritage_injection_mode = "adaptive"
+
+[temporal]
+working_capacity = 5
+micro_window = 5
+meso_window = 4
+episodic_min_reinforcement = 2
+snapshot_path = "data/temporal_sphere_snapshot.json"
+projection_limit = 3
+
+[observability]
+event_log_path = "data/events.jsonl"
+
+[task_planning]
+max_objective_chars = 320
+max_constraints = 6
+short_input_tokens = 5
+long_input_tokens = 25
+systemic_complexity_bonus = 2
+creative_complexity_bonus = 1
+constraint_complexity_bonus = 1
+review_complexity_bonus = 2
+complexity_ceiling = 5
+
+[task_planning.intent_cues]
+design_or_implementation = ["build", "design", "implement", "migrate", "architect", "port"]
+analysis = ["analyze", "assess", "evaluate", "compare", "review", "explain"]
+creative = ["create", "write", "draft", "generate", "compose", "imagine"]
+research = ["research", "sources", "cite", "evidence", "verify", "validate"]
+
+[task_planning.cues]
+constraint_markers = ["must", "must not", "cannot", "can't", "without", "only", "avoid", "do not", "keep", "require"]
+temporal_markers = ["today", "tomorrow", "yesterday", "deadline", "before", "after", "next", "current", "future", "past"]
+decision_markers = ["approve", "choose", "commit", "merge", "ship", "decide"]
+question_starters = ["what", "why", "how", "when", "where", "who", "can", "should", "would"]
+evidence_markers = ["research", "cite", "source", "verify", "test"]
+validation_markers = ["test", "validate", "acceptance", "done"]
+
+[task_competency]
+uncertainty_review_threshold = 0.55
+objective_terms = ["design", "build", "implement", "migrate", "analyze", "draft", "create", "provide", "map", "assess"]
+constraint_terms = ["must", "should", "require", "without", "only", "before", "after", "by", "include"]
+objective_required_task_classes = ["systemic", "creative", "artistic"]
+
+[task_competency.route_competencies]
+safety = ["governance"]
+deep_review = ["task_analysis", "concept_association", "emotional_ethics", "metacognition", "governance", "purpose_alignment", "ethical_adaptation"]
+creative = ["task_analysis", "emotional_ethics", "governance", "purpose_alignment"]
+default = ["task_analysis", "concept_association", "influence_mapping", "metacognition", "governance"]
+
+[task_competency.competency_providers]
+task_analysis = ["S1"]
+concept_association = ["S2"]
+emotional_ethics = ["S5"]
+influence_mapping = ["S6"]
+metacognition = ["S7"]
+governance = ["S8"]
+purpose_alignment = ["S9"]
+ethical_adaptation = ["S13"]
+artistic_expression = ["S10"]
+
+[systems]
+enabled = ["S1", "S2", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13"]
+
+[systems.maturity]
+S1 = "implemented"
+S2 = "implemented"
+S3 = "candidate"
+S4 = "candidate"
+S5 = "implemented_adapter"
+S6 = "tested_prototype_adapter"
+S7 = "implemented_adapter"
+S8 = "kernel_governance"
+S9 = "implemented_adapter"
+S10 = "candidate"
+S11 = "candidate"
+S12 = "implemented_adapter"
+S13 = "candidate"
+
+[systems.s1]
+max_concepts = 15
+min_phrase_chars = 3
+max_ngram = 3
+max_edges_per_node = 6
+emergence_threshold = 0.48
+completeness_retrieval_floor = 0.75
+neural_overlay_enabled = false
+
+[systems.s2]
+max_edges_per_node = 5
+similarity_floor = 0.40
+transitive_decay = 0.80
+uncertainty_budget = 0.75
+max_bpt_bridges = 5
+cross_domain_bonus = 0.12
