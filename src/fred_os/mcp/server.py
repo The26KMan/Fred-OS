@@ -69,10 +69,11 @@ def build_mcp_server(gateway: CommandGateway, config: MCPAdapterConfig) -> Serve
             session_id=config.session_id,
         )
         try:
-            # RuntimeKernel and the M1 SQLite idempotency connection are both
-            # single-writer/thread-affine today. Keep dispatch on their owning
-            # event-loop thread and serialize calls until a later concurrency
-            # milestone deliberately changes those contracts.
+            # M2.1 makes shared runtime/idempotency state safe across processes,
+            # but one MCP process still keeps deterministic local call ordering.
+            # RuntimeKernel acquires the inter-process transaction lock below
+            # this boundary, so this asyncio lock is a transport-local ordering
+            # policy rather than the source of cross-process state authority.
             async with dispatch_lock:
                 response = gateway.execute(request)
         except GatewayError as exc:
