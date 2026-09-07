@@ -48,7 +48,10 @@ def build_mcp_server(
     """Build one MCP server whose tools are authorized runtime capabilities."""
     dispatch_lock = asyncio.Lock()
     process_lifecycle = lifecycle or ServiceLifecycle()
-    if process_lifecycle.state == "STARTING":
+    # In-process/stdio callers that do not supply lifecycle ownership are ready
+    # immediately. HTTP supplies an explicit STARTING lifecycle; its runner marks
+    # READY only after the ASGI socket/lifespan startup has completed.
+    if lifecycle is None:
         process_lifecycle.mark_ready()
 
     async def list_tools(
