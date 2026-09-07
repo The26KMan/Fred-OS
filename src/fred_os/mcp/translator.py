@@ -6,28 +6,22 @@ select Systems, or mutate runtime state.
 from __future__ import annotations
 
 from dataclasses import asdict
-import hashlib
-import json
 from typing import Any, Mapping
+import uuid
 
 from fred_os.gateway import GatewayRequest, GatewayResponse
 
 
-def derive_idempotency_key(tool_call_id: str | None, tool_name: str, arguments: Mapping[str, Any]) -> str:
-    """Derive a stable gateway idempotency key from the host tool-call identity.
+def derive_idempotency_key(tool_call_id: str | None) -> str:
+    """Map a host/MCP request identity to the M1 idempotency boundary.
 
-    Hosts should provide their tool-call/request id. The deterministic argument
-    fallback protects simpler clients that do not expose one.
+    A request identifier is preferred because intentionally repeated calls may
+    have identical arguments. If a non-conforming host provides no request id,
+    create a fresh key rather than accidentally deduplicating legitimate work.
     """
     if tool_call_id:
         return f"mcp:{tool_call_id}"
-    packed = json.dumps(
-        {"tool": tool_name, "arguments": dict(arguments)},
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    return f"mcp:auto:{hashlib.sha256(packed.encode('utf-8')).hexdigest()}"
+    return f"mcp:anonymous:{uuid.uuid4().hex}"
 
 
 def mcp_call_to_gateway_request(
@@ -38,11 +32,11 @@ def mcp_call_to_gateway_request(
     tool_call_id: str | None = None,
     session_id: str | None = None,
 ) -> GatewayRequest:
-    """Translate one validated MCP tool call into the canonical M1 request."""
+    """Translate one MCP tool call into the canonical M1 request."""
     return GatewayRequest(
         target_capability=tool_name,
         payload=dict(arguments),
-        idempotency_key=derive_idempotency_key(tool_call_id, tool_name, arguments),
+        idempotency_key=derive_idempotency_key(tool_call_id),
         token=token,
         session_id=session_id,
     )
