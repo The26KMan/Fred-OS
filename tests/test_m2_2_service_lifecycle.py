@@ -380,7 +380,7 @@ def test_sigterm_mid_mcp_turn_drains_after_commit_and_exits_zero(tmp_path: Path)
     with sqlite3.connect(root / "data" / "gateway_idempotency.sqlite3") as connection:
         row = connection.execute(
             "SELECT status,result_json FROM gateway_idempotency WHERE caller_id=? AND idempotency_key=?",
-            (CALLER, "graceful-sigterm"),
+            (CALLER, "mcp:graceful-sigterm"),
         ).fetchone()
     assert row is not None and row[0] == "COMPLETE" and row[1]
 
