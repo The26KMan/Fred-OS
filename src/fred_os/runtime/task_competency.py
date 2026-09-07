@@ -9,9 +9,9 @@ from .routing import Route
 
 
 class TaskCompetencyOrchestrator:
-    """Convert a task state and provider evidence into an executable authorization.
+    """Convert task state and provider evidence into an execution authorization.
 
-    This layer preserves the original Task Understanding → Competency Mapping →
+    The layer preserves the Task Understanding → Competency Mapping →
     Integration/Synthesis pattern as explicit, config-driven runtime data. It never
     invokes providers and never overrides the kernel GovernanceLayer.
     """
@@ -46,17 +46,26 @@ class TaskCompetencyOrchestrator:
         gaps: list[str] = []
         if task_class in required_classes and not objectives:
             gaps.append("objective_not_detected")
+
+        context_graph = s1_state.get("context_graph", {})
+        ambiguities = context_graph.get("ambiguities", ()) if isinstance(context_graph, Mapping) else ()
+        if ambiguities:
+            gaps.append("contradictory_constraints")
+
+        requires_review = (
+            str(governance_verdict["decision"]) == "REVIEW"
+            or uncertainty >= float(self.config.get("task_competency.uncertainty_review_threshold", 1.0))
+            or bool(ambiguities)
+        )
         return {
             "task_class": task_class,
             "objectives": objectives,
             "constraints": constraints,
             "explicit_systems": explicit_systems,
             "uncertainty": uncertainty,
-            "requires_review": (
-                str(governance_verdict["decision"]) == "REVIEW"
-                or uncertainty >= float(self.config.get("task_competency.uncertainty_review_threshold", 1.0))
-            ),
-            "gaps": gaps,
+            "requires_review": requires_review,
+            "ambiguities": list(ambiguities),
+            "gaps": list(dict.fromkeys(gaps)),
         }
 
     def map_competencies(
@@ -126,6 +135,12 @@ class TaskCompetencyOrchestrator:
                 "status": "REVIEW",
                 "reason": "task_contract_incomplete",
                 "gaps": list(task_contract["gaps"]),
+            }
+        if task_contract.get("requires_review"):
+            return {
+                "status": "REVIEW",
+                "reason": "uncertainty_or_governance_review",
+                "gaps": [],
             }
         return {"status": "AUTHORIZED", "reason": "required_competencies_resolved", "gaps": []}
 
