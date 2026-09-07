@@ -1,6 +1,7 @@
 """Bootable owner of the explicit FRED OS vNext transactional runtime graph."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 import time
@@ -16,12 +17,14 @@ from .contracts import (
     canonical_hash,
     normalize_for_hash,
 )
-from .governance import GovernanceLayer
+from .governance import GovernanceLayer, GovernanceVerdict
 from .journal import RuntimeJournal
 from .observability import ObservabilityStack
 from .registry import SystemRegistry
-from .routing import Router
+from .routing import Route, Router
 from .state import StateCapsule, StateStore, capture_temporal_state, hydrate_temporal_state
+from .task_competency import TaskCompetencyOrchestrator
+from .task_planning import TaskCompetencyPlanner
 from fred_os.semantic_memory import SemanticMemoryLake
 from fred_os.systems.adapters import default_plugins
 from fred_os.temporal import TemporalSphere, TemporalSphereConfig
@@ -40,6 +43,8 @@ class RuntimeKernel:
     journal: RuntimeJournal
     current_capsule: StateCapsule
     booted_at: float
+    task_planner: TaskCompetencyPlanner | None = None
+    task_competency: TaskCompetencyOrchestrator | None = None
     status: str = "READY"
 
     @classmethod
@@ -124,6 +129,8 @@ class RuntimeKernel:
         checks = registry.health_check_all()
         router = Router(config)
 
+        planning_enabled = isinstance(config.get("task_planning", None), Mapping)
+        competency_enabled = isinstance(config.get("task_competency", None), Mapping)
         kernel = cls(
             config=config,
             governance=governance,
@@ -136,13 +143,21 @@ class RuntimeKernel:
             journal=journal,
             current_capsule=current_capsule,
             booted_at=time.time(),
+            task_planner=TaskCompetencyPlanner(config) if planning_enabled else None,
+            task_competency=TaskCompetencyOrchestrator(config) if competency_enabled else None,
             status="READY",
         )
         kernel.reconcile_wal()
         kernel.reconcile_committed_derivations()
         observability.emit(
             "SYSTEM_READY",
-            {"systems": len(checks), "boot_order": order, "capsule_id": current_capsule.capsule_id},
+            {
+                "systems": len(checks),
+                "boot_order": order,
+                "capsule_id": current_capsule.capsule_id,
+                "task_planning": planning_enabled,
+                "task_competency": competency_enabled,
+            },
         )
         return kernel
 
@@ -165,22 +180,33 @@ class RuntimeKernel:
         return self.current_capsule
 
     def list_capabilities(self) -> tuple[dict[str, Any], ...]:
-        return (
+        items: list[dict[str, Any]] = [
             {
                 "name": "runtime.process_turn",
-                "version": "0.1.0",
-                "description": "Route one governed FRED OS turn through S1 and configured downstream Systems.",
+                "version": "0.1.1",
+                "description": "Route one governed transactional FRED OS turn through S1 and configured downstream Systems.",
                 "required_permissions": (),
                 "input_schema": {"type": "object", "required": ["input"], "properties": {"input": {"type": "string"}}},
             },
             {
                 "name": "s1.cognitive_map",
-                "version": "0.1.0",
+                "version": "0.1.1",
                 "description": "Invoke the transactional turn path with System-1 cognitive mapping as the routing anchor.",
                 "required_permissions": (),
                 "input_schema": {"type": "object", "required": ["input"], "properties": {"input": {"type": "string"}}},
             },
-        )
+        ]
+        if self.task_planner is not None:
+            items.append(
+                {
+                    "name": "runtime.task_planning",
+                    "version": "0.1.0",
+                    "description": "Inspectable task analysis and competency planning embedded in transactional turn routing.",
+                    "required_permissions": (),
+                    "input_schema": {"type": "object", "required": ["input"], "properties": {"input": {"type": "string"}}},
+                }
+            )
+        return tuple(items)
 
     def process_turn(self, raw_input: str) -> dict[str, Any]:
         """Compatibility surface; the authoritative execution path is transactional dispatch()."""
@@ -203,7 +229,7 @@ class RuntimeKernel:
             raise ValueError(
                 f"Command session {envelope.session_id} does not match runtime session {self.current_capsule.session_id}"
             )
-        if envelope.target_capability not in {"runtime.process_turn", "s1.cognitive_map"}:
+        if envelope.target_capability not in {"runtime.process_turn", "s1.cognitive_map", "runtime.task_planning"}:
             raise ValueError(f"Unsupported capability: {envelope.target_capability}")
 
         raw_input = str(envelope.payload.get("input", envelope.payload.get("text", "")))
@@ -234,8 +260,6 @@ class RuntimeKernel:
             delta = self._build_delta(before, candidate, envelope.command_id, outputs)
             self.journal.append_entry("STATE_DELTA", normalize_for_hash(asdict(delta)))
 
-            # Candidate first, commit marker second. A crash between these writes leaves
-            # a non-authoritative capsule that boot() will ignore.
             self.state_store.append(candidate)
             self.journal.append_entry(
                 "TX_COMMIT",
@@ -251,9 +275,6 @@ class RuntimeKernel:
             )
             self.current_capsule = candidate
 
-            # DeepLink↔TSC rows are a rebuildable materialized index derived from the
-            # committed capsule. They are synchronized only after TX_COMMIT and are
-            # reconciled again during boot if a crash interrupts this post-commit step.
             linked = self.reconcile_committed_derivations()
             temporal_receipt = outputs.get("temporal")
             if isinstance(temporal_receipt, dict):
@@ -340,8 +361,6 @@ class RuntimeKernel:
             ),
         )
 
-        # S1 currently owns retrieval calls internally. This receipt exposes the
-        # Memory Lake evidence actually returned without pretending it was a second recall.
         memory_context = list(s1.get("memory_context", []))
         receipts.append(
             ExecutionReceipt.create(
@@ -363,19 +382,157 @@ class RuntimeKernel:
             {"task_class": s1["task_class"], "governance": verdict.decision},
             lambda: self.router.choose(s1["task_class"], verdict.decision),
         )
-        context = {"s1": s1, "governance": verdict, "temporal": self.temporal, "memory": self.memory}
-        outputs: dict[str, Any] = {"S1": s1}
-        for system_id in route.systems:
-            if system_id in {"S1", "S8"} or system_id not in self.config.get("systems.enabled"):
-                continue
-            value = execute(
-                system_id,
-                "process",
-                {"text": raw_input, "route": route.name},
-                lambda system_id=system_id: self.registry.get(system_id).process({"text": raw_input}, context),
+
+        capability_report = execute(
+            "CapabilityRegistry",
+            "assess_route",
+            {
+                "required": list(route.systems),
+                "hard_gates": list(route.hard_gate_systems),
+                "optional": list(route.optional_systems),
+            },
+            lambda: self.registry.assess_route(route.systems, route.hard_gate_systems, route.optional_systems),
+        )
+
+        planning: dict[str, Any] | None = None
+        if self.task_planner is not None:
+            planning = execute(
+                "TaskPlanning",
+                "plan",
+                {"input": raw_input, "route": route.key},
+                lambda: self.task_planner.plan(
+                    raw_input=raw_input,
+                    s1_output=s1,
+                    governance_verdict=verdict,
+                    route=route,
+                    capability_report=capability_report,
+                ),
             )
+            self.observability.emit("TASK_ANALYZED", planning["task_analysis"])
+
+        assessment: dict[str, Any] | None = None
+        if self.task_competency is not None:
+            assessment = execute(
+                "TaskCompetency",
+                "assess",
+                {"input": raw_input, "route": route.key},
+                lambda: self.task_competency.assess(
+                    raw_input,
+                    s1,
+                    {"decision": verdict.decision, "rationale": verdict.rationale, "score": verdict.score},
+                    route,
+                    capability_report,
+                ),
+            )
+            self.observability.emit("TCOL_ASSESSED", assessment["audit_receipt"])
+
+        outputs: dict[str, Any] = {"S1": s1}
+        if planning is not None:
+            outputs["TASK_PLANNING"] = planning
+        if assessment is not None:
+            outputs["TASK_COMPETENCY"] = assessment
+
+        authorization_blocked = bool(
+            assessment
+            and assessment.get("execution_authorization", {}).get("status") == "BLOCKED"
+        )
+        if not capability_report["ready"] or authorization_blocked:
+            gaps = list(capability_report.get("hard_gate_missing", ())) + list(capability_report.get("required_missing", ()))
+            if assessment:
+                gaps.extend(assessment.get("execution_authorization", {}).get("gaps", ()))
+            gaps = list(dict.fromkeys(str(item) for item in gaps))
+            blocked = GovernanceVerdict(
+                "BLOCK",
+                f"Route '{route.name}' has unresolved required capabilities: {', '.join(gaps) or 'unspecified gap'}.",
+                0.0,
+            )
+            self.observability.emit(
+                "CAPABILITY_GAP",
+                {"route": route.name, "route_key": route.key, "gaps": gaps, "capability_report": capability_report},
+            )
+            return {
+                "verdict": blocked,
+                "governance_verdict": verdict,
+                "route": route,
+                "capability_report": capability_report,
+                "task_competency": assessment,
+                "outputs": outputs,
+                "response": "Execution was stopped because declared required capabilities are not ready.",
+            }, receipts
+
+        context: dict[str, Any] = {
+            "s1": s1,
+            "governance": verdict,
+            "temporal": self.temporal,
+            "memory": self.memory,
+            "task_planning": planning,
+            "task_competency": assessment,
+        }
+        governance_system_id = str(self.config.get("governance.kernel_system_id", "S8"))
+        for system_id in route.systems:
+            if system_id == "S1":
+                continue
+            if system_id == governance_system_id:
+                value = execute(
+                    governance_system_id,
+                    "kernel_governance_pre_scan",
+                    {"decision": verdict.decision, "score": verdict.score},
+                    lambda: {
+                        "system_id": governance_system_id,
+                        "status": "kernel_governance_pre_scan",
+                        "decision": verdict.decision,
+                        "rationale": verdict.rationale,
+                        "score": verdict.score,
+                    },
+                )
+            else:
+                value = execute(
+                    system_id,
+                    "process",
+                    {"text": raw_input, "route": route.name},
+                    lambda system_id=system_id: self.registry.get(system_id).process({"text": raw_input}, context),
+                )
             outputs[system_id] = value
             context[system_id.lower()] = value
+
+        for system_id in route.optional_systems:
+            status = capability_report["systems"][system_id]
+            if status["execution_ready"]:
+                value = execute(
+                    system_id,
+                    "process_optional",
+                    {"text": raw_input, "route": route.name},
+                    lambda system_id=system_id: self.registry.get(system_id).process({"text": raw_input}, context),
+                )
+                outputs[system_id] = value
+                context[system_id.lower()] = value
+            else:
+                self.observability.emit(
+                    "OPTIONAL_CAPABILITY_SKIPPED",
+                    {"route": route.name, "system_id": system_id, "reasons": status["reasons"]},
+                )
+
+        if "S13" in route.hard_gate_systems:
+            decision = outputs.get("S13", {}).get("verified_ethical_decision", {})
+            if not isinstance(decision, dict) or decision.get("approved") is not True:
+                blocked = GovernanceVerdict(
+                    "BLOCK",
+                    "S13/QESAE hard-gate verification did not produce an approved decision.",
+                    0.0,
+                )
+                return {
+                    "verdict": blocked,
+                    "governance_verdict": verdict,
+                    "route": route,
+                    "capability_report": capability_report,
+                    "task_competency": assessment,
+                    "outputs": outputs,
+                    "response": "Execution was stopped because QESAE verification was incomplete.",
+                }, receipts
+            self.observability.emit(
+                "QESAE_GATE_APPROVED",
+                {"route": route.name, "audit_id": decision.get("audit_id")},
+            )
 
         shard = execute(
             "TSC",
@@ -396,13 +553,22 @@ class RuntimeKernel:
             "TURN_COMPLETED",
             {
                 "route": route.name,
+                "route_key": route.key,
                 "systems": list(outputs),
                 "s1_recall_hits": len(memory_context),
                 "tsc_shard_id": shard.shard_id,
                 "linked_sources": 0,
+                "authorization": assessment.get("execution_authorization", {}).get("status") if assessment else "legacy",
             },
         )
-        return {"verdict": verdict, "route": route, "outputs": outputs, "temporal": temporal_receipt}, receipts
+        return {
+            "verdict": verdict,
+            "route": route,
+            "capability_report": capability_report,
+            "task_competency": assessment,
+            "outputs": outputs,
+            "temporal": temporal_receipt,
+        }, receipts
 
     def _build_delta(
         self,
@@ -420,7 +586,10 @@ class RuntimeKernel:
         temporal_receipt = outputs.get("temporal", {}) if isinstance(outputs.get("temporal"), dict) else {}
         source_deeplinks = list(temporal_receipt.get("source_deeplinks", ()))
         tsc_mutations = {
-            "current_turn": {"before": int(before_tsc.get("current_turn", 0)), "after": int(after_tsc.get("current_turn", 0))},
+            "current_turn": {
+                "before": int(before_tsc.get("current_turn", 0)),
+                "after": int(after_tsc.get("current_turn", 0)),
+            },
             "added_shard_ids": sorted(after_shards - before_shards),
             "added_commitment_keys": sorted(after_commitments - before_commitments),
         }
