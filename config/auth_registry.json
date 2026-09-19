@@ -1,0 +1,12 @@
+{
+  "tokens": [
+    {
+      "token_hash": "73d1379a8159ca07a6f33c376b45905ad27bfb87136e402d278966f478dbf9cf",
+      "caller_id": "dev",
+      "permissions": [
+        "gateway.execute",
+        "capability:*"
+      ]
+    }
+  ]
+}
