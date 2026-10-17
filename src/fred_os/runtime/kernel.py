@@ -209,6 +209,13 @@ class RuntimeKernel:
                 "required_permissions": (),
                 "input_schema": {"type": "object", "required": ["input"], "properties": {"input": {"type": "string"}}},
             },
+            {
+                "name": "s2.concept_association",
+                "version": "0.1.0",
+                "description": "Invoke the transactional turn path and return the System-2 inferred association overlay over the S1 graph envelope.",
+                "required_permissions": (),
+                "input_schema": {"type": "object", "required": ["input"], "properties": {"input": {"type": "string"}}},
+            },
         ]
         if self.task_planner is not None:
             items.append(
@@ -239,7 +246,7 @@ class RuntimeKernel:
     def dispatch(self, envelope: CommandEnvelope) -> CommandResult:
         if self.status != "READY":
             raise RuntimeError(f"RuntimeKernel is not READY: {self.status}")
-        if envelope.target_capability not in {"runtime.process_turn", "s1.cognitive_map", "runtime.task_planning"}:
+        if envelope.target_capability not in {"runtime.process_turn", "s1.cognitive_map", "s2.concept_association", "runtime.task_planning"}:
             raise ValueError(f"Unsupported capability: {envelope.target_capability}")
         with self.runtime_lock:
             self._refresh_authoritative_state_locked(session_id=envelope.session_id)

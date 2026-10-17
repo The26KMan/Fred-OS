@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schema://S1/common/1.0",
+  "title": "System-1 Common Definitions",
+  "$defs": {
+    "identifier": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"},
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "epistemic_state": {"enum": ["source", "prior", "inferred", "uncertain", "contradicted"]},
+    "confidence": {
+      "type": "object",
+      "required": ["value", "method"],
+      "properties": {
+        "value": {"type": "number", "minimum": 0, "maximum": 1},
+        "method": {"enum": ["calibrated", "heuristic", "model-assigned", "human-assigned", "rule-derived"]},
+        "calibration_ref": {"type": ["string", "null"]},
+        "explanation_code": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["provenance_id", "source_id", "producer_id", "transformation_chain"],
+      "properties": {
+        "provenance_id": {"$ref": "schema://S1/common/1.0#/$defs/identifier"},
+        "source_id": {"$ref": "schema://S1/common/1.0#/$defs/identifier"},
+        "block_id": {"type": ["string", "null"]},
+        "span": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "array", "prefixItems": [{"type": "integer", "minimum": 0}, {"type": "integer", "minimum": 0}], "items": false, "minItems": 2, "maxItems": 2}
+          ]
+        },
+        "span_unavailable_reason": {"type": ["string", "null"]},
+        "producer_id": {"type": "string", "minLength": 1},
+        "transformation_chain": {"type": "array", "items": {"type": "string"}}
+      },
+      "allOf": [
+        {"if": {"properties": {"span": {"type": "null"}}}, "then": {"required": ["span_unavailable_reason"]}}
+      ],
+      "additionalProperties": false
+    },
+    "temporal_tag": {
+      "type": "object",
+      "properties": {
+        "valid_from": {"type": ["string", "null"], "format": "date-time"},
+        "valid_to": {"type": ["string", "null"], "format": "date-time"},
+        "precision": {"enum": ["exact", "day", "range", "relative", "unknown"]},
+        "expression": {"type": ["string", "null"]}
+      },
+      "required": ["precision"],
+      "additionalProperties": false
+    }
+  }
+}

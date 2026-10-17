@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schema://S1/context-graph/1.0",
+  "title": "System-1 Context Graph Payload",
+  "type": "object",
+  "required": ["nodes", "edges", "metadata"],
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "type", "epistemic_state", "salience", "activation", "confidence", "provenance", "domains", "attributes"],
+        "properties": {
+          "id": {"$ref": "schema://S1/common/1.0#/$defs/identifier"},
+          "label": {"type": "string", "minLength": 1},
+          "type": {"enum": ["entity", "actor", "role", "concept", "event", "objective", "task", "constraint", "claim", "question", "temporal-marker", "domain", "system", "artifact"]},
+          "epistemic_state": {"$ref": "schema://S1/common/1.0#/$defs/epistemic_state"},
+          "salience": {"type": "number", "minimum": 0, "maximum": 1},
+          "activation": {"type": "number", "minimum": -1, "maximum": 1},
+          "confidence": {"$ref": "schema://S1/common/1.0#/$defs/confidence"},
+          "provenance": {"type": "array", "minItems": 1, "items": {"$ref": "schema://S1/common/1.0#/$defs/provenance"}},
+          "temporal": {"oneOf": [{"type": "null"}, {"$ref": "schema://S1/common/1.0#/$defs/temporal_tag"}]},
+          "domains": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "attributes": {"type": "object"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "source", "target", "relation", "weight", "confidence", "epistemic_state", "provenance", "attributes"],
+        "properties": {
+          "id": {"$ref": "schema://S1/common/1.0#/$defs/identifier"},
+          "source": {"$ref": "schema://S1/common/1.0#/$defs/identifier"},
+          "target": {"$ref": "schema://S1/common/1.0#/$defs/identifier"},
+          "relation": {"type": "string", "minLength": 1},
+          "weight": {"type": "number", "minimum": -1, "maximum": 1},
+          "confidence": {"$ref": "schema://S1/common/1.0#/$defs/confidence"},
+          "epistemic_state": {"$ref": "schema://S1/common/1.0#/$defs/epistemic_state"},
+          "provenance": {"type": "array", "minItems": 1, "items": {"$ref": "schema://S1/common/1.0#/$defs/provenance"}},
+          "temporal": {"oneOf": [{"type": "null"}, {"$ref": "schema://S1/common/1.0#/$defs/temporal_tag"}]},
+          "attributes": {"type": "object"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["source_layer_present", "overlay_layer_present"],
+      "properties": {
+        "source_layer_present": {"type": "boolean"},
+        "overlay_layer_present": {"type": "boolean"},
+        "uncertainty": {"type": "object"}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
+

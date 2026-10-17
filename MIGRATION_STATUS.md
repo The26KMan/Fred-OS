@@ -31,6 +31,12 @@ These changes are branch-local until the test suite is run and reviewed. They do
 
 1. Run the full suite locally and in GitHub Actions before merge.
 2. Complete the System-2 association port on the integrated S1/TSC/Memory contract.
+   - Started: the reference S2 `0.3.0-draft.5` runtime is ported into
+     `src/fred_os/systems/` against the reference S1 Graph Envelope contract
+     (`schema://S1/graph-envelope/1.0`), registered as the S2 adapter, and
+     covered by 28 tests. Remaining: TSC-ledger integration, MCP tool exposure
+     for the individual S2 operations, and S1-side emission of the reference
+     envelope rather than the adapter bridge.
 3. Add optional upstream NLP adapters for dependency parsing, NER, and coreference resolution.
 4. Harden System-8 governance and then migrate S6, S5/S9, and S7/S12 through the same spec → code → schema → config → example → test pattern.
 5. Inventory and archive or rewrite remaining legacy modules by authority and maturity.

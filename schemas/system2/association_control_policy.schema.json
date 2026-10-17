@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schema://S2/association-control-policy/1.0",
+  "title": "System-2 Association Control Policy",
+  "type": "object",
+  "required": ["operating_region", "max_path_depth", "max_candidates", "max_external_neighbors", "max_output_associations", "min_compound_confidence", "non_destructive"],
+  "properties": {
+    "operating_region": {"enum": ["underactive", "stable", "exploratory", "saturated", "critical"]},
+    "max_path_depth": {"type": "integer", "minimum": 1, "maximum": 4},
+    "max_candidates": {"type": "integer", "minimum": 1, "maximum": 256},
+    "max_external_neighbors": {"type": "integer", "minimum": 0, "maximum": 8},
+    "max_output_associations": {"type": "integer", "minimum": 1, "maximum": 48},
+    "min_compound_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "non_destructive": {"const": true}
+  },
+  "additionalProperties": false
+}

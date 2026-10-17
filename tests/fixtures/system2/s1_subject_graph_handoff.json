@@ -1,0 +1,679 @@
+{
+  "envelope_version": "1.0",
+  "graph_id": "cg_subjects_bundle_resolved",
+  "graph_family": "semantic",
+  "graph_revision": 0,
+  "parent_revision": null,
+  "producer": {
+    "system": "S1",
+    "functioning": "functioning://S1/GRAPH.CONSTRUCTION",
+    "version": "0.3.0-draft.6",
+    "runtime_profile": "standard"
+  },
+  "temporal_anchor": "2026-10-06T08:31:28Z",
+  "payload_schema": "schema://S1/context-graph/1.0",
+  "payload": {
+    "nodes": [
+      {
+        "id": "node_source_graph",
+        "label": "Source Graph",
+        "type": "artifact",
+        "epistemic_state": "source",
+        "salience": 0.9,
+        "activation": 0.74,
+        "confidence": {
+          "value": 1.0,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "EXPLICIT_SUBJECT"
+        },
+        "provenance": [
+          {
+            "provenance_id": "prov-f29702cd8e39ed55",
+            "source_id": "test-prompt-2026-10-06",
+            "block_id": "subject-set",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "domains": [
+          "provenance",
+          "data-ingestion"
+        ],
+        "attributes": {
+          "role": "evidence-bearing source topology"
+        }
+      },
+      {
+        "id": "node_memory_of_loci",
+        "label": "Memory of Loci",
+        "type": "concept",
+        "epistemic_state": "source",
+        "salience": 0.82,
+        "activation": 0.68,
+        "confidence": {
+          "value": 1.0,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "EXPLICIT_SUBJECT"
+        },
+        "provenance": [
+          {
+            "provenance_id": "prov-f29702cd8e39ed55",
+            "source_id": "test-prompt-2026-10-06",
+            "block_id": "subject-set",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "domains": [
+          "mnemonics",
+          "spatial-memory"
+        ],
+        "attributes": {
+          "role": "spatial retrieval and positional anchoring paradigm"
+        }
+      },
+      {
+        "id": "node_cognitive_mapping",
+        "label": "Cognitive Mapping",
+        "type": "system",
+        "epistemic_state": "source",
+        "salience": 0.98,
+        "activation": 0.92,
+        "confidence": {
+          "value": 1.0,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "EXPLICIT_SUBJECT"
+        },
+        "provenance": [
+          {
+            "provenance_id": "prov-f29702cd8e39ed55",
+            "source_id": "test-prompt-2026-10-06",
+            "block_id": "subject-set",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "domains": [
+          "system-os",
+          "cognitive-architecture"
+        ],
+        "attributes": {
+          "role": "construct and maintain typed evidence-aware context graphs"
+        }
+      },
+      {
+        "id": "node_model_context",
+        "label": "Model Context",
+        "type": "artifact",
+        "epistemic_state": "source",
+        "salience": 0.92,
+        "activation": 0.86,
+        "confidence": {
+          "value": 1.0,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "EXPLICIT_SUBJECT"
+        },
+        "provenance": [
+          {
+            "provenance_id": "prov-f29702cd8e39ed55",
+            "source_id": "test-prompt-2026-10-06",
+            "block_id": "subject-set",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "domains": [
+          "runtime-execution",
+          "context-window"
+        ],
+        "attributes": {
+          "role": "active information state available to the model"
+        }
+      },
+      {
+        "id": "node_candidate_graph",
+        "label": "Candidate Graph",
+        "type": "artifact",
+        "epistemic_state": "source",
+        "salience": 0.88,
+        "activation": 0.7,
+        "confidence": {
+          "value": 0.98,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "EXPLICIT_SUBJECT"
+        },
+        "provenance": [
+          {
+            "provenance_id": "prov-bee5f0bde7943f51",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "artifact_model",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": [
+              "bundle://system1/0.3.0-draft.6"
+            ]
+          }
+        ],
+        "temporal": null,
+        "domains": [
+          "admission",
+          "staging"
+        ],
+        "attributes": {
+          "role": "provisional staging state"
+        }
+      },
+      {
+        "id": "node_context_graph",
+        "label": "Canonical Context Graph",
+        "type": "artifact",
+        "epistemic_state": "source",
+        "salience": 0.96,
+        "activation": 0.88,
+        "confidence": {
+          "value": 1.0,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "EXPLICIT_SUBJECT"
+        },
+        "provenance": [
+          {
+            "provenance_id": "prov-bee5f0bde7943f51",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "artifact_model",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": [
+              "bundle://system1/0.3.0-draft.6"
+            ]
+          }
+        ],
+        "temporal": null,
+        "domains": [
+          "canonical-state"
+        ],
+        "attributes": {
+          "role": "validated machine-readable situational state"
+        }
+      },
+      {
+        "id": "node_temporal_anchor",
+        "label": "Temporal Anchor",
+        "type": "temporal-marker",
+        "epistemic_state": "source",
+        "salience": 0.76,
+        "activation": 0.55,
+        "confidence": {
+          "value": 1.0,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "EXPLICIT_SUBJECT"
+        },
+        "provenance": [
+          {
+            "provenance_id": "prov-bee5f0bde7943f51",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "artifact_model",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": [
+              "bundle://system1/0.3.0-draft.6"
+            ]
+          }
+        ],
+        "temporal": null,
+        "domains": [
+          "temporal-context"
+        ],
+        "attributes": {
+          "role": "revision-time reference"
+        }
+      },
+      {
+        "id": "node_graph_envelope",
+        "label": "Graph Envelope",
+        "type": "artifact",
+        "epistemic_state": "source",
+        "salience": 0.9,
+        "activation": 0.78,
+        "confidence": {
+          "value": 1.0,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "EXPLICIT_SUBJECT"
+        },
+        "provenance": [
+          {
+            "provenance_id": "prov-bee5f0bde7943f51",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "artifact_model",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": [
+              "bundle://system1/0.3.0-draft.6"
+            ]
+          }
+        ],
+        "temporal": null,
+        "domains": [
+          "transport",
+          "schema"
+        ],
+        "attributes": {
+          "schema_ref": "schema://S1/graph-envelope/1.0"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_source_graph_supports_cognitive_mapping",
+        "source": "node_source_graph",
+        "target": "node_cognitive_mapping",
+        "relation": "supports",
+        "weight": 0.94,
+        "confidence": {
+          "value": 0.9,
+          "method": "heuristic",
+          "calibration_ref": null,
+          "explanation_code": "SOURCE_TO_MAP_PIPELINE"
+        },
+        "epistemic_state": "inferred",
+        "provenance": [
+          {
+            "provenance_id": "prov-7e49cd58a78fd295",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "sec_5",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "attributes": {
+          "semantics": "Source structure supplies evidence-bearing input to mapping."
+        }
+      },
+      {
+        "id": "edge_cognitive_mapping_influences_model_context",
+        "source": "node_cognitive_mapping",
+        "target": "node_model_context",
+        "relation": "influences",
+        "weight": 0.97,
+        "confidence": {
+          "value": 0.94,
+          "method": "heuristic",
+          "calibration_ref": null,
+          "explanation_code": "SITUATIONAL_MAP_OUTPUT"
+        },
+        "epistemic_state": "inferred",
+        "provenance": [
+          {
+            "provenance_id": "prov-4c8cf0754ebdbb65",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "sec_2.2",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "attributes": {
+          "semantics": "Cognitive Mapping organizes the active situational model context."
+        }
+      },
+      {
+        "id": "edge_memory_of_loci_associated_with_cognitive_mapping",
+        "source": "node_memory_of_loci",
+        "target": "node_cognitive_mapping",
+        "relation": "associated-with",
+        "weight": 0.82,
+        "confidence": {
+          "value": 0.78,
+          "method": "heuristic",
+          "calibration_ref": null,
+          "explanation_code": "SPATIAL_MAPPING_ANALOGY"
+        },
+        "epistemic_state": "prior",
+        "provenance": [
+          {
+            "provenance_id": "prov-4d4cc5e85dedf5cf",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "external_prior",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "attributes": {
+          "semantics": "Memory of Loci and Cognitive Mapping share spatial-relational organization."
+        }
+      },
+      {
+        "id": "edge_memory_of_loci_influences_model_context",
+        "source": "node_memory_of_loci",
+        "target": "node_model_context",
+        "relation": "influences",
+        "weight": 0.72,
+        "confidence": {
+          "value": 0.72,
+          "method": "heuristic",
+          "calibration_ref": null,
+          "explanation_code": "POSITIONAL_CONTEXT_HYPOTHESIS"
+        },
+        "epistemic_state": "inferred",
+        "provenance": [
+          {
+            "provenance_id": "prov-4d4cc5e85dedf5cf",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "external_prior",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "attributes": {
+          "semantics": "Spatial anchors may organize retrieval within model context."
+        }
+      },
+      {
+        "id": "edge_model_context_refers_to_source_graph",
+        "source": "node_model_context",
+        "target": "node_source_graph",
+        "relation": "refers-to",
+        "weight": 0.91,
+        "confidence": {
+          "value": 0.89,
+          "method": "heuristic",
+          "calibration_ref": null,
+          "explanation_code": "PROVENANCE_BACKLINK"
+        },
+        "epistemic_state": "inferred",
+        "provenance": [
+          {
+            "provenance_id": "prov-39c6e48680a8ec15",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "sec_2.5",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "attributes": {
+          "semantics": "Model context retains links to evidence sources through provenance."
+        }
+      },
+      {
+        "id": "edge_source_graph_influences_candidate_graph",
+        "source": "node_source_graph",
+        "target": "node_candidate_graph",
+        "relation": "influences",
+        "weight": 0.96,
+        "confidence": {
+          "value": 0.98,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "NORMATIVE_PIPELINE"
+        },
+        "epistemic_state": "source",
+        "provenance": [
+          {
+            "provenance_id": "prov-7e49cd58a78fd295",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "sec_5",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "attributes": {
+          "semantics": "Normalized sources feed candidate proposal."
+        }
+      },
+      {
+        "id": "edge_candidate_graph_supports_context_graph",
+        "source": "node_candidate_graph",
+        "target": "node_context_graph",
+        "relation": "supports",
+        "weight": 0.98,
+        "confidence": {
+          "value": 1.0,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "ADMISSION_BOUNDARY"
+        },
+        "epistemic_state": "source",
+        "provenance": [
+          {
+            "provenance_id": "prov-ae3358d0e2a0d561",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "sec_6.2",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "attributes": {
+          "semantics": "Only admitted candidates support canonical construction."
+        }
+      },
+      {
+        "id": "edge_cognitive_mapping_influences_context_graph",
+        "source": "node_cognitive_mapping",
+        "target": "node_context_graph",
+        "relation": "influences",
+        "weight": 1.0,
+        "confidence": {
+          "value": 1.0,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "OWNED_OUTPUT"
+        },
+        "epistemic_state": "source",
+        "provenance": [
+          {
+            "provenance_id": "prov-4b1b70ed07217283",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "sec_2.4",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "attributes": {
+          "semantics": "Cognitive Mapping owns Context Graph construction and maintenance."
+        }
+      },
+      {
+        "id": "edge_context_graph_part_of_model_context",
+        "source": "node_context_graph",
+        "target": "node_model_context",
+        "relation": "part-of",
+        "weight": 0.93,
+        "confidence": {
+          "value": 0.88,
+          "method": "heuristic",
+          "calibration_ref": null,
+          "explanation_code": "ACTIVE_CONTEXT_PROJECTION"
+        },
+        "epistemic_state": "inferred",
+        "provenance": [
+          {
+            "provenance_id": "prov-4c8cf0754ebdbb65",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "sec_2.2",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "attributes": {
+          "semantics": "The Context Graph forms a structured portion of active model context."
+        }
+      },
+      {
+        "id": "edge_context_graph_part_of_graph_envelope",
+        "source": "node_context_graph",
+        "target": "node_graph_envelope",
+        "relation": "part-of",
+        "weight": 1.0,
+        "confidence": {
+          "value": 1.0,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "TRANSPORT_CONTRACT"
+        },
+        "epistemic_state": "source",
+        "provenance": [
+          {
+            "provenance_id": "prov-00e40ee4a74efcc5",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "sec_4.6",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "attributes": {
+          "semantics": "The Graph Envelope carries the canonical Context Graph payload."
+        }
+      },
+      {
+        "id": "edge_temporal_anchor_part_of_graph_envelope",
+        "source": "node_temporal_anchor",
+        "target": "node_graph_envelope",
+        "relation": "part-of",
+        "weight": 1.0,
+        "confidence": {
+          "value": 1.0,
+          "method": "rule-derived",
+          "calibration_ref": null,
+          "explanation_code": "TEMPORAL_FIELD"
+        },
+        "epistemic_state": "source",
+        "provenance": [
+          {
+            "provenance_id": "prov-00e40ee4a74efcc5",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "sec_4.6",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "attributes": {
+          "semantics": "The transport envelope records the active temporal anchor."
+        }
+      },
+      {
+        "id": "edge_temporal_anchor_influences_model_context",
+        "source": "node_temporal_anchor",
+        "target": "node_model_context",
+        "relation": "influences",
+        "weight": 0.84,
+        "confidence": {
+          "value": 0.82,
+          "method": "heuristic",
+          "calibration_ref": null,
+          "explanation_code": "TEMPORAL_CONTEXTUALIZATION"
+        },
+        "epistemic_state": "inferred",
+        "provenance": [
+          {
+            "provenance_id": "prov-a1261758c23fd7e6",
+            "source_id": "System1_Cognitive_Mapping_Full_Implementation_Spec_v0.3.0-draft.6.md",
+            "block_id": "sec_7",
+            "span": null,
+            "span_unavailable_reason": "whole_block_semantic_reference",
+            "producer_id": "S1.CANDIDATE.PROPOSAL",
+            "transformation_chain": []
+          }
+        ],
+        "temporal": null,
+        "attributes": {
+          "semantics": "Temporal anchoring contextualizes active model state across revisions."
+        }
+      }
+    ],
+    "metadata": {
+      "source_layer_present": true,
+      "overlay_layer_present": true,
+      "test_mode": "spec_plus_bundle",
+      "subject_set": [
+        "Source Graph",
+        "Memory of Loci",
+        "Cognitive Mapping",
+        "Model Context"
+      ],
+      "admission_counts": {
+        "proposed": 20,
+        "admitted": 20,
+        "quarantined": 0,
+        "review_required": 0,
+        "rejected": 0
+      }
+    }
+  },
+  "validation": {
+    "status": "valid",
+    "schema_valid": true,
+    "semantic_valid": true,
+    "validator": "system1_handlers.semantic-v1",
+    "validated_at": "2026-10-06T08:31:28Z",
+    "violations": []
+  },
+  "provenance": [
+    {
+      "provenance_id": "prov-affc8a831b276ce2",
+      "source_id": "test-prompt-2026-10-06",
+      "block_id": "subject-set",
+      "span": null,
+      "span_unavailable_reason": "whole_block_semantic_reference",
+      "producer_id": "S1",
+      "transformation_chain": []
+    }
+  ],
+  "handoffs": [],
+  "content_digest": "sha256:cae3950aeb4f1a5fe1364777e67a9abf999f22e9850d383f0e87de163ec36735",
+  "created_at": "2026-10-06T08:31:28Z"
+}

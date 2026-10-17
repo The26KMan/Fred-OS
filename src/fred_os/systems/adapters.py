@@ -9,6 +9,7 @@ from typing import Any, ClassVar
 
 from fred_os.runtime.contracts import SystemPlugin
 from .system1_runtime_adapter import System1RuntimeAdapter
+from .system2_adapter import System2ConceptAssociation
 
 
 class DeclaredAdapter(SystemPlugin):
@@ -24,20 +25,6 @@ class DeclaredAdapter(SystemPlugin):
         }
 
 
-class S2(DeclaredAdapter):
-    SYSTEM_ID = "S2"
-    SYSTEM_NAME = "Concept Association"
-    HARD_DEPENDENCIES = ("S1",)
-
-    def process(self, payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-        nodes = list(context.get("s1", {}).get("entities", []))
-        return {
-            "system_id": self.SYSTEM_ID,
-            "edges": [{"source": left, "target": right, "relation": "co_present"} for index, left in enumerate(nodes) for right in nodes[index + 1:]][:30],
-            "input_node_count": len(nodes),
-        }
-
-
 class S5(DeclaredAdapter): SYSTEM_ID = "S5"; SYSTEM_NAME = "Emotional-Ethical"; HARD_DEPENDENCIES = ("S1",)
 class S6(DeclaredAdapter): SYSTEM_ID = "S6"; SYSTEM_NAME = "Influence Flower"; HARD_DEPENDENCIES = ("S1", "S2")
 class S7(DeclaredAdapter): SYSTEM_ID = "S7"; SYSTEM_NAME = "Metacognition"; HARD_DEPENDENCIES = ("S1", "S2")
@@ -50,4 +37,4 @@ class S13(DeclaredAdapter): SYSTEM_ID = "S13"; SYSTEM_NAME = "Ethical Adaptation
 
 
 def default_plugins() -> list[type[SystemPlugin]]:
-    return [System1RuntimeAdapter, S2, S5, S6, S7, S8, S9, S10, S11, S12, S13]
+    return [System1RuntimeAdapter, System2ConceptAssociation, S5, S6, S7, S8, S9, S10, S11, S12, S13]

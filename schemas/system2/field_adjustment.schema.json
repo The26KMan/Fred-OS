@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schema://S2/field-adjustment/1.0",
+  "title": "System-2 Authorized Field Adjustment",
+  "type": "object",
+  "required": ["adjustment_id", "authorized", "issuer"],
+  "properties": {
+    "adjustment_id": {"type": "string", "minLength": 1},
+    "authorized": {"const": true},
+    "issuer": {"enum": ["S8", "S12", "RuntimeKernel"]},
+    "target_roles": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "g_scale": {"type": "number", "minimum": 0.5, "maximum": 1.5},
+    "alpha_scale": {"type": "number", "minimum": 0.5, "maximum": 1.5},
+    "beta_scale": {"type": "number", "minimum": 0.5, "maximum": 1.5}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schema://S2/neural-field-capsule/1.0",
+  "title": "System-2 Neural Field Capsule",
+  "type": "object",
+  "required": ["type", "version", "system", "model_semantics", "neural_state", "channels", "currents", "load_metrics", "control_policy"],
+  "properties": {
+    "type": {"const": "S2_NeuralFieldCapsule"},
+    "version": {"const": "1.0"},
+    "system": {"const": "S2"},
+    "model_semantics": {
+      "type": "object",
+      "required": ["kind", "biological_fidelity_claimed"],
+      "properties": {
+        "kind": {"const": "HH-inspired bounded control analogy"},
+        "biological_fidelity_claimed": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "neural_state": {
+      "type": "object",
+      "required": ["V", "V_rest", "C", "leak", "dV_dt", "equilibrium_deviation"],
+      "properties": {
+        "V": {"type": "number", "minimum": 0, "maximum": 1},
+        "V_rest": {"type": "number", "minimum": 0, "maximum": 1},
+        "C": {"type": "number", "exclusiveMinimum": 0},
+        "leak": {"type": "number", "minimum": 0},
+        "dV_dt": {"type": "number"},
+        "equilibrium_deviation": {"type": "number", "minimum": -1, "maximum": 1}
+      },
+      "additionalProperties": false
+    },
+    "channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "role", "g", "a", "E", "alpha", "beta", "current"],
+        "properties": {
+          "from": {"type": "string"},
+          "role": {"type": "string"},
+          "g": {"type": "number", "minimum": 0, "maximum": 1},
+          "a": {"type": "number", "minimum": 0, "maximum": 1},
+          "E": {"type": "number", "minimum": 0, "maximum": 1},
+          "alpha": {"type": "number", "minimum": 0},
+          "beta": {"type": "number", "minimum": 0},
+          "current": {"type": "number"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "currents": {
+      "type": "object",
+      "required": ["I_channels", "I_ext", "I_feedback", "I_governance", "I_leak", "dV"],
+      "additionalProperties": {"type": "number"}
+    },
+    "load_metrics": {"type": "object"},
+    "control_policy": {"$ref": "schema://S2/association-control-policy/1.0"}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schema://S1/graph-envelope/1.0",
+  "title": "System-1 Graph Envelope 1.0",
+  "description": "Canonical versioned transport envelope for System-1 graph payloads.",
+  "type": "object",
+  "required": ["envelope_version", "graph_id", "graph_family", "graph_revision", "parent_revision", "producer", "temporal_anchor", "payload_schema", "payload", "validation", "provenance", "handoffs", "content_digest", "created_at"],
+  "properties": {
+    "envelope_version": {"const": "1.0"},
+    "graph_id": {"$ref": "schema://S1/common/1.0#/$defs/identifier"},
+    "graph_family": {"enum": ["situational", "task", "semantic", "temporal", "influence", "neurosemantic", "article-overlay"]},
+    "graph_revision": {"type": "integer", "minimum": 0},
+    "parent_revision": {"type": ["integer", "null"], "minimum": 0},
+    "producer": {
+      "type": "object",
+      "required": ["system", "functioning", "version", "runtime_profile"],
+      "properties": {
+        "system": {"const": "S1"},
+        "functioning": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "runtime_profile": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "temporal_anchor": {"type": ["string", "null"]},
+    "payload_schema": {"const": "schema://S1/context-graph/1.0"},
+    "payload": {"$ref": "schema://S1/context-graph/1.0"},
+    "validation": {
+      "type": "object",
+      "required": ["status", "schema_valid", "semantic_valid", "validator", "validated_at", "violations"],
+      "properties": {
+        "status": {"enum": ["valid", "invalid", "partial"]},
+        "schema_valid": {"type": "boolean"},
+        "semantic_valid": {"type": "boolean"},
+        "validator": {"type": "string", "minLength": 1},
+        "validated_at": {"type": "string", "format": "date-time"},
+        "violations": {"type": "array", "items": {"type": "object", "required": ["code", "path", "message"], "properties": {"code": {"type": "string"}, "path": {"type": "string"}, "message": {"type": "string"}}, "additionalProperties": false}}
+      },
+      "additionalProperties": false
+    },
+    "provenance": {"type": "array", "minItems": 1, "items": {"$ref": "schema://S1/common/1.0#/$defs/provenance"}},
+    "handoffs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["target_system", "purpose", "contract_ref", "status"],
+        "properties": {
+          "target_system": {"type": "string", "minLength": 1},
+          "purpose": {"type": "string", "minLength": 1},
+          "contract_ref": {"type": "string", "minLength": 1},
+          "status": {"enum": ["prepared", "sent", "accepted", "rejected", "not_authorized"]}
+        },
+        "additionalProperties": false
+      }
+    },
+    "content_digest": {"$ref": "schema://S1/common/1.0#/$defs/digest"},
+    "created_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "graph_revision": {"const": 0}
+        }
+      },
+      "then": {
+        "properties": {
+          "parent_revision": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "validation": {
+            "properties": {
+              "status": {"const": "valid"}
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "validation": {
+            "properties": {
+              "schema_valid": {"const": true},
+              "semantic_valid": {"const": true},
+              "violations": {"maxItems": 0}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}
