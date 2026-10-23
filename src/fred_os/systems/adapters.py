@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from fred_os.runtime.contracts import SystemPlugin
+from fred_os.superagent.adapter import SuperagentFabric
 from .system1_runtime_adapter import System1RuntimeAdapter
 from .system2_adapter import System2ConceptAssociation
 
@@ -37,4 +38,17 @@ class S13(DeclaredAdapter): SYSTEM_ID = "S13"; SYSTEM_NAME = "Ethical Adaptation
 
 
 def default_plugins() -> list[type[SystemPlugin]]:
-    return [System1RuntimeAdapter, System2ConceptAssociation, S5, S6, S7, S8, S9, S10, S11, S12, S13]
+    return [
+        System1RuntimeAdapter,
+        System2ConceptAssociation,
+        SuperagentFabric,
+        S5,
+        S6,
+        S7,
+        S8,
+        S9,
+        S10,
+        S11,
+        S12,
+        S13,
+    ]

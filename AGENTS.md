@@ -49,6 +49,31 @@ docker compose -f docker-compose.base44.yml up -d
   `process()` must never raise on ordinary input — it returns a status
   (`no_source_graph` / `invalid_source_graph` / `association_overlay`) instead.
 
+## Superagent Integration Fabric (SA1)
+
+- `src/fred_os/superagent/` — folds the FRED reference materials into the
+  runtime. `supervisor.py` (12 deterministic K/P/G checks), `preflight.py`
+  (offline plan-only `ScanRequest → ScanPlan`, `can_dispatch=False`,
+  `NOT_SCANNED`), `caseweave.py` (Python port of the CaseWeave P0 Q1–Q6
+  engine), `surfaces.py` (GitHub/Supabase/Gemini/Base44/Superagent.sh design
+  contracts, all `enabled: false`), `adapter.py` (`SuperagentFabric`).
+- Registered in `systems/adapters.py` as `SA1`, maturity `implemented_adapter`,
+  and listed in `optional_systems` of the `default` and `deep_review` routes so
+  it never hard-gates a turn. `process()` must never raise — it returns
+  `supervision_record` or `supervision_error`.
+- A check whose evidence is absent reports **`UNKNOWN`**, never a promoted
+  pass. `P-REPLAY`, `P-LEDGER` and `P-BASELINE` are `UNKNOWN` in ordinary
+  turns: the AADN reducer, the TSC hash-chain ledger and the fixed multi-hop
+  fixture are not integrated yet.
+- Capability `sa1.superagent_supervision` is advertised by
+  `RuntimeKernel.list_capabilities()` and projected into an MCP tool for
+  authorised principals (the path an external agent host would use).
+- Offline CLI (no kernel boot, no network): `fred superagent surfaces |
+  preflight | caseweave | supervise`. `--auth-registry` is only required by the
+  `run` and `mcp` subcommands.
+- See `docs/architecture/superagent-integration-signalization.md` for the
+  reference-to-signalization map and the honest coverage boundaries.
+
 **Config-hash gotcha:** changing `config/systemos_base.toml` changes the frozen
 config hash. A kernel boot against stale committed state then fails with
 "Committed StateCapsule config hash … does not match active config …". Reset the
@@ -61,9 +86,10 @@ start a fresh genesis.
 docker compose -f docker-compose.base44.yml exec -T app python -m pytest -q
 ```
 
-86 tests: runtime recovery, routing, gateway, MCP, temporal, repository
-pipeline, and the System-2 port (`test_system2_concept_association.py`,
-`test_system2_adapter.py`).
+117 tests: runtime recovery, routing, gateway, MCP, temporal, repository
+pipeline, the System-2 port (`test_system2_concept_association.py`,
+`test_system2_adapter.py`), and the Superagent fabric
+(`test_superagent_fabric.py`).
 
 ## Notes
 

@@ -55,7 +55,7 @@ reason = "governance blocked route"
 name = "deep_review"
 systems = ["S1", "S2", "S5", "S7", "S8", "S9", "S13"]
 hard_gate_systems = ["S8", "S13"]
-optional_systems = []
+optional_systems = ["SA1"]
 reason = "elevated evidence review requires QESAE verification"
 
 [protocol.routes.creative]
@@ -69,7 +69,7 @@ reason = "creative task class with governance baseline"
 name = "CHAINING"
 systems = ["S1", "S2", "S6", "S7", "S8"]
 hard_gate_systems = ["S8"]
-optional_systems = []
+optional_systems = ["SA1"]
 reason = "default configured protocol"
 
 [memory]
@@ -140,11 +140,12 @@ ethical_adaptation = ["S13"]
 artistic_expression = ["S10"]
 
 [systems]
-enabled = ["S1", "S2", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13"]
+enabled = ["S1", "S2", "SA1", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13"]
 
 [systems.maturity]
 S1 = "implemented"
 S2 = "implemented"
+SA1 = "implemented_adapter"
 S3 = "candidate"
 S4 = "candidate"
 S5 = "implemented_adapter"
@@ -180,3 +181,11 @@ feedback_cycle_penalty = 0.65
 min_novelty = 0.35
 field_enabled = true
 harmony_tau = 35.0
+
+[systems.superagent]
+# Superagent Integration Fabric (SA1): independent K/P/G supervision over a
+# governed turn, the registered agent surfaces, and a plan-only assurance
+# posture. External dispatch is off by design; turning it on requires a real
+# authenticated connector and an independent trusted policy decision.
+external_operations_allowed = false
+include_agent_surfaces = true

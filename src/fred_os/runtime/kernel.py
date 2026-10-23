@@ -216,6 +216,17 @@ class RuntimeKernel:
                 "required_permissions": (),
                 "input_schema": {"type": "object", "required": ["input"], "properties": {"input": {"type": "string"}}},
             },
+            {
+                "name": "sa1.superagent_supervision",
+                "version": "0.1.0",
+                "description": (
+                    "Invoke the transactional turn path and return the Superagent Integration Fabric's "
+                    "independent K/P/G supervision record, registered agent surfaces and plan-only "
+                    "assurance posture. Non-mutating and non-authoritative; external dispatch is disabled."
+                ),
+                "required_permissions": (),
+                "input_schema": {"type": "object", "required": ["input"], "properties": {"input": {"type": "string"}}},
+            },
         ]
         if self.task_planner is not None:
             items.append(
@@ -246,7 +257,13 @@ class RuntimeKernel:
     def dispatch(self, envelope: CommandEnvelope) -> CommandResult:
         if self.status != "READY":
             raise RuntimeError(f"RuntimeKernel is not READY: {self.status}")
-        if envelope.target_capability not in {"runtime.process_turn", "s1.cognitive_map", "s2.concept_association", "runtime.task_planning"}:
+        if envelope.target_capability not in {
+            "runtime.process_turn",
+            "s1.cognitive_map",
+            "s2.concept_association",
+            "runtime.task_planning",
+            "sa1.superagent_supervision",
+        }:
             raise ValueError(f"Unsupported capability: {envelope.target_capability}")
         with self.runtime_lock:
             self._refresh_authoritative_state_locked(session_id=envelope.session_id)

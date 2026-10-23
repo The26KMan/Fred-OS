@@ -68,11 +68,13 @@ Evidence states distinguish `DECLARED`, `STRUCTURALLY_SPECIFIED`, `MODEL_INTERPR
 - `src/fred_os/temporal/` — Temporal Sphere implementation
 - `src/fred_os/systems/` — System adapters and System-1 implementation
 - `src/fred_os/semantic_memory.py` / `src/fred_os/artifact_store.py` — semantic evidence, immutable DeepLinks, durable audit storage
+- `src/fred_os/superagent/` — Superagent Integration Fabric (SA1): independent K/P/G supervision, offline security preflight, CaseWeave Q1–Q6 port, agent-surface contracts
 - `src/systemos/repository_pipeline/` — retrieval-to-repository refinement contracts and pipeline
 - `tests/test_m0_runtime_transaction_recovery.py` — canonical M0 atomic recovery/replay gate
 - `tests/test_vnext_runtime.py` — routing, capability maturity, task-competency and fail-closed behavior
 - `tests/unit/test_repository_pipeline.py` — repository-refinement validation
 - `specs/protocols/task_competency_orchestration.md` — TCOL runtime contract
+- `docs/architecture/superagent-integration-signalization.md` — where each FRED reference artifact signalizes in the runtime
 - `docs/architecture/retrieval-to-repository-pipeline.md` — repository-refinement architecture
 - `skills/repository-refinement/SKILL.md` — refinement workflow
 - `specs/functionings/repository_refinement.pseulang.md` — PseuLang abstraction
