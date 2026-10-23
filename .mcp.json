@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "superagent": {
+      "type": "http",
+      "url": "https://www.superagent.sh/mcp",
+      "headers": {
+        "Authorization": "Bearer ${SUPERAGENT_API_KEY}"
+      }
+    }
+  }
+}
